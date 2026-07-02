@@ -32,7 +32,7 @@ jobs:
 
       - name: Download market data
         run: |
-          python src/data/download_market_data.py --universe ticker_universe.json --output data/raw/market_data.parquet
+          python src/data/download_market_data.py --universe src/agents/ticker_universe.json --output data/raw/market_data.parquet
 
       - name: Commit updated market data
         run: |
