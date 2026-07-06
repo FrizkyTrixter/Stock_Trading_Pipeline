@@ -35,11 +35,14 @@ def download_one(ticker, start):
     if df.empty:
         return None
 
+    # Fix yfinance MultiIndex columns like ('Open', 'NVDA')
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+
     df = df.reset_index()
-    df["Ticker"] = ticker
+    df["Ticker"] = ticker.upper()
 
     return df[["Date", "Ticker", "Open", "High", "Low", "Close", "Volume"]]
-
 
 def main():
     parser = argparse.ArgumentParser()
