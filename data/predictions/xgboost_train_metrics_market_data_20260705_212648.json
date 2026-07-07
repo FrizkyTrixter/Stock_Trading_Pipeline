@@ -1,0 +1,15 @@
+{
+  "data_source": "local_market_data_file",
+  "latest_prediction_date": "2026-07-02",
+  "train_start_date": "2025-07-07",
+  "train_end_date": "2026-04-21",
+  "train_rows": 19442,
+  "train_positive_rate": 0.7197304804032507,
+  "train_accuracy": 0.8192058430202654,
+  "train_precision": 0.8094506792675723,
+  "train_recall": 0.9793468162652755,
+  "train_TP": 13704,
+  "train_TN": 2223,
+  "train_FP": 3226,
+  "train_FN": 289
+}

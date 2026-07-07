@@ -1,16 +1,22 @@
-# train_xgboost_model_stooq.py
-# pip install pandas numpy scikit-learn xgboost joblib
+# train_xgboost_model_market_data.py
+# pip install pandas numpy scikit-learn xgboost joblib pyarrow
+#
+# This version DOES NOT download from Stooq.
+# It uses the market data produced by your GitHub Action:
+#
+#     data/raw/market_data.parquet
+#
+# Expected market data format, one row per ticker per date:
+# Date, Ticker, Open, High, Low, Close, Volume
+#
+# The loader is deliberately tolerant of slightly different capitalization
+# and common yfinance column names.
 
 import argparse
 import json
 import os
-import time
 import warnings
 from datetime import datetime
-from urllib.parse import urlencode
-from io import StringIO
-
-import requests
 
 warnings.filterwarnings("ignore")
 
@@ -30,12 +36,10 @@ TARGET_RETURN = 0.10
 PROBA_THRESHOLD = 0.50
 MAX_POSITIONS = 20
 
-DEFAULT_UNIVERSE_FILE = "ticker_universe.json"
+DEFAULT_UNIVERSE_FILE = "src/agents/ticker_universe.json"
 DEFAULT_OUTPUT_DIR = "data/predictions"
 DEFAULT_MODEL_DIR = "data/processed"
-DEFAULT_CACHE_FILE = "data/raw/stooq_market_data.csv"
-
-STOOQ_BASE_URL = "https://stooq.com/q/d/l/"
+DEFAULT_MARKET_DATA_FILE = "data/raw/market_data.parquet"
 
 
 def rsi(series, window=14):
@@ -80,183 +84,142 @@ def load_tickers_from_json(path):
     return clean
 
 
-def _date_to_stooq(value):
-    if value is None:
-        return None
-    return pd.Timestamp(value).strftime("%Y%m%d")
-
-
-def ticker_to_stooq_symbol(ticker, exchange_suffix="us"):
+def _flatten_columns(df):
     """
-    Convert ordinary US tickers to Stooq symbols.
-
-    Examples:
-    NVDA  -> nvda.us
-    BRK.B -> brk-b.us
-    MOG.A -> mog-a.us
-
-    Stooq commonly uses hyphens where Yahoo/other feeds use class-share dots.
+    Handles normal columns and accidental MultiIndex columns.
+    Example MultiIndex yfinance columns become Close_NVDA, Volume_NVDA, etc.
+    This script mostly expects already-flat long-format data, but this prevents
+    weird crashes if a file was saved with MultiIndex columns.
     """
-    t = str(ticker).strip().lower()
-    t = t.replace(".", "-")
-    return f"{t}.{exchange_suffix.lower()}"
-
-
-def _download_one_stooq_ticker(ticker, start=START, end=END, exchange_suffix="us"):
-    stooq_symbol = ticker_to_stooq_symbol(ticker, exchange_suffix=exchange_suffix)
-
-    params = {
-        "s": stooq_symbol,
-        "i": "d",
-        "d1": _date_to_stooq(start),
-    }
-    if end:
-        params["d2"] = _date_to_stooq(end)
-
-    url = f"{STOOQ_BASE_URL}?{urlencode(params)}"
-
-    # Important: pandas.read_csv(url) uses urllib with a weak/default user-agent.
-    # Stooq sometimes returns HTTP 404 to that, even for valid symbols like NVDA.US.
-    # Fetch manually with a browser-like user-agent, then parse the CSV text.
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/120.0 Safari/537.36"
-        ),
-        "Accept": "text/csv,text/plain,*/*",
-    }
-
-    try:
-        resp = requests.get(url, headers=headers, timeout=30)
-        if resp.status_code != 200:
-            print(f"Failed {ticker} ({stooq_symbol}): HTTP {resp.status_code} | {url}")
-            return pd.DataFrame(columns=["Date", "Ticker", "Open", "High", "Low", "Close", "Volume"])
-
-        text = resp.text.strip()
-        if not text or text.lower().startswith("no data") or "Date" not in text.splitlines()[0]:
-            print(f"No Stooq rows for {ticker} ({stooq_symbol})")
-            return pd.DataFrame(columns=["Date", "Ticker", "Open", "High", "Low", "Close", "Volume"])
-
-        df = pd.read_csv(StringIO(text))
-    except Exception as e:
-        print(f"Failed {ticker} ({stooq_symbol}): {repr(e)}")
-        return pd.DataFrame(columns=["Date", "Ticker", "Open", "High", "Low", "Close", "Volume"])
-
-    if df.empty or "Date" not in df.columns:
-        print(f"No Stooq rows for {ticker} ({stooq_symbol})")
-        return pd.DataFrame(columns=["Date", "Ticker", "Open", "High", "Low", "Close", "Volume"])
-
-    needed = ["Date", "Open", "High", "Low", "Close", "Volume"]
-    missing = [c for c in needed if c not in df.columns]
-    if missing:
-        print(f"Skipping {ticker}: Stooq response missing columns {missing}")
-        return pd.DataFrame(columns=["Date", "Ticker", "Open", "High", "Low", "Close", "Volume"])
-
-    df = df[needed].copy()
-    df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
-    df["Ticker"] = ticker.upper()
-
-    for col in ["Open", "High", "Low", "Close", "Volume"]:
-        df[col] = pd.to_numeric(df[col], errors="coerce")
-
-    df = df[["Date", "Ticker", "Open", "High", "Low", "Close", "Volume"]]
-    df = df.dropna(subset=["Date", "Open", "High", "Low", "Close", "Volume"])
-    df = df.sort_values("Date")
+    if isinstance(df.columns, pd.MultiIndex):
+        df = df.copy()
+        df.columns = [
+            "_".join([str(x) for x in col if str(x) != ""]).strip("_")
+            for col in df.columns
+        ]
     return df
 
 
-def download_data(
-    tickers,
-    start=START,
-    end=END,
-    cache_file=DEFAULT_CACHE_FILE,
-    refresh=False,
-    sleep_seconds=1.5,
-    max_retries=3,
-    exchange_suffix="us",
-):
+def _find_column(df, candidates):
     """
-    Download daily OHLCV data from Stooq.
-
-    Why this is safer than the yfinance version:
-    - Stooq is queried one ticker at a time.
-    - Results are cached to disk.
-    - Existing cached tickers are skipped.
-    - Failed tickers are retried with a simple backoff.
-
-    Note: Stooq may not have every very recent IPO or speculative ticker.
-    Any unavailable tickers are skipped and written to a missing-tickers file.
+    Case-insensitive column finder.
     """
-    os.makedirs(os.path.dirname(cache_file) or ".", exist_ok=True)
+    lower_map = {str(c).strip().lower(): c for c in df.columns}
+    for candidate in candidates:
+        key = candidate.strip().lower()
+        if key in lower_map:
+            return lower_map[key]
+    return None
 
-    cached = pd.DataFrame()
-    if os.path.exists(cache_file) and not refresh:
-        print(f"Loading cached Stooq data from {cache_file}")
-        cached = pd.read_csv(cache_file, parse_dates=["Date"])
-        cached["Ticker"] = cached["Ticker"].astype(str).str.upper()
-        cached_tickers = set(cached["Ticker"].unique())
-        tickers_to_download = [t for t in tickers if t not in cached_tickers]
-        if not tickers_to_download:
-            print("Cache already contains all requested tickers. Skipping Stooq download.")
-            return cached[cached["Ticker"].isin(tickers)].copy()
-        print(f"Cache contains {len(cached_tickers)} tickers. Downloading {len(tickers_to_download)} missing tickers.")
-    else:
-        tickers_to_download = tickers
 
-    frames = []
-    failed = []
+def _standardize_market_data_columns(df):
+    """
+    Converts your saved market data into the exact columns used by the model:
+    Date, Ticker, Open, High, Low, Close, Volume
+    """
+    df = _flatten_columns(df).copy()
 
-    for i, ticker in enumerate(tickers_to_download, start=1):
-        print(f"Downloading {i}/{len(tickers_to_download)} from Stooq: {ticker}")
-        panel = pd.DataFrame()
+    # Sometimes parquet/csv files preserve an index as a real column.
+    unnamed = [c for c in df.columns if str(c).lower().startswith("unnamed")]
+    if unnamed:
+        df = df.drop(columns=unnamed)
 
-        for attempt in range(1, max_retries + 1):
-            panel = _download_one_stooq_ticker(
-                ticker=ticker,
-                start=start,
-                end=end,
-                exchange_suffix=exchange_suffix,
-            )
-            if not panel.empty:
-                break
+    date_col = _find_column(df, ["Date", "Datetime", "date", "datetime", "index"])
+    ticker_col = _find_column(df, ["Ticker", "ticker", "Symbol", "symbol"])
 
-            if attempt < max_retries:
-                wait = sleep_seconds * attempt
-                print(f"Retrying {ticker} after {wait:.1f} seconds...")
-                time.sleep(wait)
+    open_col = _find_column(df, ["Open", "open"])
+    high_col = _find_column(df, ["High", "high"])
+    low_col = _find_column(df, ["Low", "low"])
+    close_col = _find_column(df, ["Close", "close", "Adj Close", "adj close", "Adj_Close", "adj_close"])
+    volume_col = _find_column(df, ["Volume", "volume"])
 
-        if panel.empty:
-            failed.append(ticker)
-        else:
-            frames.append(panel)
-
-        if i < len(tickers_to_download):
-            time.sleep(sleep_seconds)
-
-    downloaded = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
-
-    if cached.empty and downloaded.empty:
-        raise RuntimeError(
-            "No market data downloaded from Stooq. Check internet connection, ticker symbols, or Stooq availability."
+    required = {
+        "Date": date_col,
+        "Ticker": ticker_col,
+        "Open": open_col,
+        "High": high_col,
+        "Low": low_col,
+        "Close": close_col,
+        "Volume": volume_col,
+    }
+    missing = [name for name, col in required.items() if col is None]
+    if missing:
+        raise ValueError(
+            "Market data file is missing required columns: "
+            f"{missing}\nAvailable columns: {list(df.columns)}"
         )
 
-    combined = pd.concat([cached, downloaded], ignore_index=True) if not cached.empty else downloaded
-    combined = combined.drop_duplicates(subset=["Date", "Ticker"], keep="last")
-    combined = combined.sort_values(["Ticker", "Date"]).reset_index(drop=True)
-    combined.to_csv(cache_file, index=False)
-    print(f"Saved Stooq market data cache to {cache_file}")
+    out = df[[date_col, ticker_col, open_col, high_col, low_col, close_col, volume_col]].copy()
+    out.columns = ["Date", "Ticker", "Open", "High", "Low", "Close", "Volume"]
 
-    if failed:
-        missing_path = os.path.splitext(cache_file)[0] + "_missing_tickers.json"
-        with open(missing_path, "w", encoding="utf-8") as f:
-            json.dump(failed, f, indent=2)
-        print(f"Warning: {len(failed)} tickers had no Stooq data. Saved list to {missing_path}")
+    out["Date"] = pd.to_datetime(out["Date"], errors="coerce")
+    out["Ticker"] = out["Ticker"].astype(str).str.strip().str.upper()
 
-    return combined[combined["Ticker"].isin(tickers)].copy()
+    for col in ["Open", "High", "Low", "Close", "Volume"]:
+        out[col] = pd.to_numeric(out[col], errors="coerce")
+
+    out = out.dropna(subset=["Date", "Ticker", "Open", "High", "Low", "Close", "Volume"])
+    out = out[out["Ticker"] != ""]
+    out = out.drop_duplicates(subset=["Date", "Ticker"], keep="last")
+    out = out.sort_values(["Ticker", "Date"]).reset_index(drop=True)
+
+    if out.empty:
+        raise RuntimeError("Market data loaded successfully, but no usable OHLCV rows remained after cleaning.")
+
+    return out
 
 
-# Same technical indicators as the original script.
+def load_market_data(market_data_file, tickers=None, start=START, end=END):
+    """
+    Loads the already-downloaded market data file.
+
+    Supported file types:
+    - .parquet / .pq
+    - .csv
+
+    This is the key change from the Stooq version:
+    no API calls, no requests, no redownloading.
+    """
+    if not os.path.exists(market_data_file):
+        raise FileNotFoundError(
+            f"Market data file not found: {market_data_file}\n"
+            "Run this first from your repo root:\n"
+            "  git pull\n"
+            "Then confirm the file exists:\n"
+            "  ls -lh data/raw/market_data.parquet"
+        )
+
+    ext = os.path.splitext(market_data_file)[1].lower()
+    if ext in [".parquet", ".pq"]:
+        raw = pd.read_parquet(market_data_file)
+    elif ext == ".csv":
+        raw = pd.read_csv(market_data_file)
+    else:
+        raise ValueError(
+            f"Unsupported market data file type: {ext}. "
+            "Use .parquet or .csv."
+        )
+
+    prices = _standardize_market_data_columns(raw)
+
+    if tickers is not None:
+        tickers = [str(t).strip().upper() for t in tickers]
+        prices = prices[prices["Ticker"].isin(tickers)].copy()
+
+    if start:
+        prices = prices[prices["Date"] >= pd.Timestamp(start)].copy()
+    if end:
+        prices = prices[prices["Date"] <= pd.Timestamp(end)].copy()
+
+    if prices.empty:
+        raise RuntimeError(
+            "No market data remained after filtering by universe/start/end. "
+            "Check your ticker universe and date filters."
+        )
+
+    return prices
+
+
 def add_indicators(df):
     out = []
 
@@ -306,7 +269,7 @@ def add_indicators(df):
         out.append(g)
 
     if not out:
-        raise RuntimeError("No ticker data available after download. Cannot build indicators.")
+        raise RuntimeError("No ticker data available. Cannot build indicators.")
 
     return pd.concat(out, ignore_index=True)
 
@@ -335,16 +298,16 @@ def create_xgb_model(device="cuda"):
 
 
 def train_latest_model(panel, feature_cols, train_days=TRAIN_DAYS, device="cuda"):
-    dates = sorted(panel["Date"].unique())
+    dates = sorted(panel["Date"].dropna().unique())
     latest_prediction_date = dates[-1]
 
     trainable = panel.dropna(subset=feature_cols + ["Target"]).copy()
-    trainable_dates = sorted(trainable["Date"].unique())
+    trainable_dates = sorted(trainable["Date"].dropna().unique())
 
     if len(trainable_dates) < train_days:
         raise RuntimeError(
             f"Not enough trainable dates. Need {train_days}, found {len(trainable_dates)}. "
-            "Try an earlier START date or fewer indicator windows."
+            "Try an earlier --start date or fewer indicator windows."
         )
 
     train_dates = trainable_dates[-train_days:]
@@ -363,7 +326,7 @@ def train_latest_model(panel, feature_cols, train_days=TRAIN_DAYS, device="cuda"
     tn, fp, fn, tp = confusion_matrix(y_train, train_pred, labels=[0, 1]).ravel()
 
     metrics = {
-        "data_source": "stooq",
+        "data_source": "local_market_data_file",
         "latest_prediction_date": str(pd.Timestamp(latest_prediction_date).date()),
         "train_start_date": str(pd.Timestamp(train_dates[0]).date()),
         "train_end_date": str(pd.Timestamp(train_dates[-1]).date()),
@@ -405,11 +368,11 @@ def save_outputs(model, picks, metrics, feature_cols, model_dir, output_dir):
 
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    model_path = os.path.join(model_dir, f"xgboost_model_stooq_{stamp}.joblib")
-    picks_csv_path = os.path.join(output_dir, f"xgboost_buy_picks_stooq_{stamp}.csv")
-    picks_json_path = os.path.join(output_dir, f"xgboost_buy_picks_stooq_{stamp}.json")
-    metrics_path = os.path.join(output_dir, f"xgboost_train_metrics_stooq_{stamp}.json")
-    feature_path = os.path.join(output_dir, f"xgboost_feature_columns_stooq_{stamp}.json")
+    model_path = os.path.join(model_dir, f"xgboost_model_market_data_{stamp}.joblib")
+    picks_csv_path = os.path.join(output_dir, f"xgboost_buy_picks_market_data_{stamp}.csv")
+    picks_json_path = os.path.join(output_dir, f"xgboost_buy_picks_market_data_{stamp}.json")
+    metrics_path = os.path.join(output_dir, f"xgboost_train_metrics_market_data_{stamp}.json")
+    feature_path = os.path.join(output_dir, f"xgboost_feature_columns_market_data_{stamp}.json")
 
     joblib.dump(model, model_path)
     picks.to_csv(picks_csv_path, index=False)
@@ -436,22 +399,35 @@ def save_outputs(model, picks, metrics, feature_cols, model_dir, output_dir):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Train XGBoost on ticker universe using Stooq data and output current buy candidates.")
+    parser = argparse.ArgumentParser(
+        description="Train XGBoost on your already-downloaded market_data.parquet and output current buy candidates."
+    )
     parser.add_argument("--universe", default=DEFAULT_UNIVERSE_FILE, help="Path to ticker_universe.json or plain ticker list JSON")
-    parser.add_argument("--start", default=START, help="Start date for Stooq data")
-    parser.add_argument("--end", default=END, help="End date for Stooq data; default is latest available")
+    parser.add_argument("--market-data-file", default=DEFAULT_MARKET_DATA_FILE, help="Path to data/raw/market_data.parquet")
+    parser.add_argument("--start", default=START, help="Start date to use from market data")
+    parser.add_argument("--end", default=END, help="End date to use from market data; default uses latest available")
     parser.add_argument("--train-days", type=int, default=TRAIN_DAYS)
     parser.add_argument("--threshold", type=float, default=PROBA_THRESHOLD)
     parser.add_argument("--max-positions", type=int, default=MAX_POSITIONS)
     parser.add_argument("--device", default="cuda", choices=["cuda", "cpu"], help="Use cuda if your XGBoost install/GPU supports it; otherwise use cpu")
     parser.add_argument("--output-dir", default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--model-dir", default=DEFAULT_MODEL_DIR)
-    parser.add_argument("--cache-file", default=DEFAULT_CACHE_FILE)
-    parser.add_argument("--refresh-data", action="store_true", help="Ignore cached market data and redownload from Stooq")
-    parser.add_argument("--sleep-seconds", type=float, default=1.5, help="Seconds to sleep between Stooq ticker requests")
-    parser.add_argument("--max-retries", type=int, default=3, help="Retries per ticker")
-    parser.add_argument("--exchange-suffix", default="us", help="Stooq exchange suffix. For US stocks, use 'us'.")
+
+    # Backward-compatible aliases so old commands do not instantly explode.
+    # --cache-file now means the same thing as --market-data-file.
+    parser.add_argument("--cache-file", default=None, help=argparse.SUPPRESS)
+    parser.add_argument("--refresh-data", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--sleep-seconds", type=float, default=1.5, help=argparse.SUPPRESS)
+    parser.add_argument("--max-retries", type=int, default=3, help=argparse.SUPPRESS)
+    parser.add_argument("--exchange-suffix", default="us", help=argparse.SUPPRESS)
+
     args = parser.parse_args()
+
+    if args.cache_file:
+        args.market_data_file = args.cache_file
+
+    if args.refresh_data:
+        print("Ignoring --refresh-data because this script uses local market data and does not download.")
 
     print("XGBoost version:", xgb.__version__)
     print(f"Using XGBoost device: {args.device}")
@@ -459,20 +435,23 @@ def main():
     tickers = load_tickers_from_json(args.universe)
     print(f"Loaded {len(tickers)} tickers from {args.universe}")
 
-    print("Downloading Stooq data...")
-    prices = download_data(
-        tickers,
+    print(f"Loading market data from {args.market_data_file}...")
+    prices = load_market_data(
+        market_data_file=args.market_data_file,
+        tickers=tickers,
         start=args.start,
         end=args.end,
-        cache_file=args.cache_file,
-        refresh=args.refresh_data,
-        sleep_seconds=args.sleep_seconds,
-        max_retries=args.max_retries,
-        exchange_suffix=args.exchange_suffix,
     )
 
     available = sorted(prices["Ticker"].unique()) if not prices.empty else []
-    print(f"Using {len(available)} tickers with Stooq data.")
+    print(f"Using {len(available)} tickers with local market data.")
+    print(f"Market data rows: {len(prices):,}")
+    print(f"Date range: {prices['Date'].min().date()} to {prices['Date'].max().date()}")
+
+    missing_from_file = sorted(set(tickers) - set(available))
+    if missing_from_file:
+        print(f"Warning: {len(missing_from_file)} universe tickers are missing from the market data file.")
+        print("First missing tickers:", ", ".join(missing_from_file[:25]))
 
     print("Building technical indicators and labels...")
     panel = add_indicators(prices)
