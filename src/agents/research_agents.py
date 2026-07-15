@@ -13,6 +13,11 @@ You are an elite AI infrastructure investment research agent.
 
 Your task is to build a 100-stock ticker universe for an AI-driven adaptive trading system.
 
+You must use web search to discover the companies and validate every ticker using
+current internet sources. Do not build the universe from memory alone. Search
+broadly across the categories below, then confirm that each selected company is
+currently publicly traded and that its ticker is current before including it.
+
 Strategy:
 Use the "AI picks and shovels" investment philosophy inspired by Leopold Aschenbrenner-style AI infrastructure thinking.
 
@@ -84,6 +89,8 @@ def get_ticker_universe() -> dict:
     response = client.responses.create(
         model=MODEL,
         input=build_god_prompt(),
+        tools=[{"type": "web_search"}],
+        tool_choice="required",
         text={
             "format": {
                 "type": "json_object"
