@@ -25,12 +25,19 @@ import numpy as np
 import pandas as pd
 import xgboost as xgb
 from xgboost import XGBClassifier
-from sklearn.metrics import accuracy_score, precision_score, recall_score, confusion_matrix
+from sklearn.metrics import (
+    accuracy_score,
+    confusion_matrix,
+    precision_score,
+    recall_score,
+    roc_auc_score,
+)
 
 
 START = "2015-01-01"
 END = None
 TRAIN_DAYS = 200
+VALIDATION_DAYS = 50
 HORIZON = 50
 TARGET_RETURN = 0.10
 PROBA_THRESHOLD = 0.50
@@ -297,49 +304,119 @@ def create_xgb_model(device="cuda"):
     )
 
 
-def train_latest_model(panel, feature_cols, train_days=TRAIN_DAYS, device="cuda"):
+def classification_metrics(y_true, predictions, probabilities, prefix):
+    """Return JSON-safe classification metrics with a consistent prefix."""
+    tn, fp, fn, tp = confusion_matrix(y_true, predictions, labels=[0, 1]).ravel()
+    metrics = {
+        f"{prefix}_rows": int(len(y_true)),
+        f"{prefix}_positive_rate": float(y_true.mean()),
+        f"{prefix}_accuracy": float(accuracy_score(y_true, predictions)),
+        f"{prefix}_precision": float(precision_score(y_true, predictions, zero_division=0)),
+        f"{prefix}_recall": float(recall_score(y_true, predictions, zero_division=0)),
+        f"{prefix}_TP": int(tp),
+        f"{prefix}_TN": int(tn),
+        f"{prefix}_FP": int(fp),
+        f"{prefix}_FN": int(fn),
+    }
+    # ROC AUC is undefined when a split contains only one target class.
+    metrics[f"{prefix}_roc_auc"] = (
+        float(roc_auc_score(y_true, probabilities)) if y_true.nunique() == 2 else None
+    )
+    majority_rate = max(float(y_true.mean()), 1.0 - float(y_true.mean()))
+    metrics[f"{prefix}_majority_baseline_accuracy"] = majority_rate
+    metrics[f"{prefix}_accuracy_vs_baseline"] = metrics[f"{prefix}_accuracy"] - majority_rate
+    return metrics
+
+
+def json_safe(value):
+    """Convert model metadata to strict JSON (no NaN or NumPy values)."""
+    if isinstance(value, dict):
+        return {str(key): json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [json_safe(item) for item in value]
+    if isinstance(value, np.generic):
+        value = value.item()
+    if isinstance(value, float) and not np.isfinite(value):
+        return None
+    return value
+
+
+def train_latest_model(
+    panel,
+    feature_cols,
+    train_days=TRAIN_DAYS,
+    validation_days=VALIDATION_DAYS,
+    embargo_days=HORIZON,
+    device="cuda",
+):
+    """Validate chronologically, then fit a production model on recent labels.
+
+    The embargo prevents a training row's forward 50-day label window from
+    overlapping the validation period. This is essential for an honest result.
+    """
     dates = sorted(panel["Date"].dropna().unique())
     latest_prediction_date = dates[-1]
 
     trainable = panel.dropna(subset=feature_cols + ["Target"]).copy()
     trainable_dates = sorted(trainable["Date"].dropna().unique())
 
-    if len(trainable_dates) < train_days:
+    required_dates = train_days + validation_days + embargo_days
+    if len(trainable_dates) < required_dates:
         raise RuntimeError(
-            f"Not enough trainable dates. Need {train_days}, found {len(trainable_dates)}. "
+            f"Not enough trainable dates. Need at least {required_dates} "
+            f"({train_days} train + {embargo_days} embargo + "
+            f"{validation_days} validation), found {len(trainable_dates)}. "
             "Try an earlier --start date or fewer indicator windows."
         )
 
-    train_dates = trainable_dates[-train_days:]
-    train = trainable[trainable["Date"].isin(train_dates)].copy()
+    validation_dates = trainable_dates[-validation_days:]
+    validation_start_index = len(trainable_dates) - validation_days
+    train_end_index = validation_start_index - embargo_days
+    evaluation_train_dates = trainable_dates[train_end_index - train_days:train_end_index]
 
-    X_train = train[feature_cols]
-    y_train = train["Target"].astype(int)
+    evaluation_train = trainable[trainable["Date"].isin(evaluation_train_dates)].copy()
+    validation = trainable[trainable["Date"].isin(validation_dates)].copy()
 
+    X_train = evaluation_train[feature_cols]
+    y_train = evaluation_train["Target"].astype(int)
+    X_validation = validation[feature_cols]
+    y_validation = validation["Target"].astype(int)
+
+    evaluation_model = create_xgb_model(device=device)
+    evaluation_model.fit(X_train, y_train)
+
+    validation_probabilities = evaluation_model.predict_proba(X_validation)[:, 1]
+    validation_predictions = (validation_probabilities >= 0.5).astype(int)
+
+    # After measuring out-of-sample performance, use the most recent labelled
+    # observations to train the model that scores today's candidates.
+    production_dates = trainable_dates[-train_days:]
+    production_train = trainable[trainable["Date"].isin(production_dates)].copy()
     model = create_xgb_model(device=device)
-    model.fit(X_train, y_train)
-
-    train_pred = model.predict(X_train)
-    acc = accuracy_score(y_train, train_pred)
-    prec = precision_score(y_train, train_pred, zero_division=0)
-    rec = recall_score(y_train, train_pred, zero_division=0)
-    tn, fp, fn, tp = confusion_matrix(y_train, train_pred, labels=[0, 1]).ravel()
+    model.fit(production_train[feature_cols], production_train["Target"].astype(int))
 
     metrics = {
         "data_source": "local_market_data_file",
         "latest_prediction_date": str(pd.Timestamp(latest_prediction_date).date()),
-        "train_start_date": str(pd.Timestamp(train_dates[0]).date()),
-        "train_end_date": str(pd.Timestamp(train_dates[-1]).date()),
-        "train_rows": int(len(train)),
-        "train_positive_rate": float(y_train.mean()),
-        "train_accuracy": float(acc),
-        "train_precision": float(prec),
-        "train_recall": float(rec),
-        "train_TP": int(tp),
-        "train_TN": int(tn),
-        "train_FP": int(fp),
-        "train_FN": int(fn),
+        "target": f"maximum close return >= {TARGET_RETURN:.0%} in next {HORIZON} sessions",
+        "evaluation_train_start_date": str(pd.Timestamp(evaluation_train_dates[0]).date()),
+        "evaluation_train_end_date": str(pd.Timestamp(evaluation_train_dates[-1]).date()),
+        "embargo_sessions": int(embargo_days),
+        "validation_start_date": str(pd.Timestamp(validation_dates[0]).date()),
+        "validation_end_date": str(pd.Timestamp(validation_dates[-1]).date()),
+        "production_train_start_date": str(pd.Timestamp(production_dates[0]).date()),
+        "production_train_end_date": str(pd.Timestamp(production_dates[-1]).date()),
+        "production_train_rows": int(len(production_train)),
+        "model_parameters": json_safe(model.get_params()),
     }
+    metrics.update(
+        classification_metrics(
+            y_validation,
+            validation_predictions,
+            validation_probabilities,
+            "validation",
+        )
+    )
 
     return model, metrics, latest_prediction_date
 
@@ -373,6 +450,7 @@ def save_outputs(model, picks, metrics, feature_cols, model_dir, output_dir):
     picks_json_path = os.path.join(output_dir, f"xgboost_buy_picks_market_data_{stamp}.json")
     metrics_path = os.path.join(output_dir, f"xgboost_train_metrics_market_data_{stamp}.json")
     feature_path = os.path.join(output_dir, f"xgboost_feature_columns_market_data_{stamp}.json")
+    importance_path = os.path.join(output_dir, f"xgboost_feature_importance_market_data_{stamp}.csv")
 
     joblib.dump(model, model_path)
     picks.to_csv(picks_csv_path, index=False)
@@ -384,10 +462,15 @@ def save_outputs(model, picks, metrics, feature_cols, model_dir, output_dir):
         json.dump(picks_json.to_dict(orient="records"), f, indent=2)
 
     with open(metrics_path, "w", encoding="utf-8") as f:
-        json.dump(metrics, f, indent=2)
+        json.dump(metrics, f, indent=2, allow_nan=False)
 
     with open(feature_path, "w", encoding="utf-8") as f:
         json.dump(feature_cols, f, indent=2)
+
+    feature_importance = pd.DataFrame(
+        {"Feature": feature_cols, "Importance": model.feature_importances_}
+    ).sort_values("Importance", ascending=False)
+    feature_importance.to_csv(importance_path, index=False)
 
     return {
         "model": model_path,
@@ -395,6 +478,7 @@ def save_outputs(model, picks, metrics, feature_cols, model_dir, output_dir):
         "picks_json": picks_json_path,
         "metrics": metrics_path,
         "feature_columns": feature_path,
+        "feature_importance": importance_path,
     }
 
 
@@ -407,6 +491,7 @@ def main():
     parser.add_argument("--start", default=START, help="Start date to use from market data")
     parser.add_argument("--end", default=END, help="End date to use from market data; default uses latest available")
     parser.add_argument("--train-days", type=int, default=TRAIN_DAYS)
+    parser.add_argument("--validation-days", type=int, default=VALIDATION_DAYS)
     parser.add_argument("--threshold", type=float, default=PROBA_THRESHOLD)
     parser.add_argument("--max-positions", type=int, default=MAX_POSITIONS)
     parser.add_argument("--device", default="cuda", choices=["cuda", "cpu"], help="Use cuda if your XGBoost install/GPU supports it; otherwise use cpu")
@@ -464,6 +549,8 @@ def main():
         panel=panel,
         feature_cols=feature_cols,
         train_days=args.train_days,
+        validation_days=args.validation_days,
+        embargo_days=HORIZON,
         device=args.device,
     )
 

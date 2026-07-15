@@ -1,0 +1,58 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyright/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Packaging and coverage output
+build/
+dist/
+*.egg-info/
+.coverage
+.coverage.*
+htmlcov/
+
+# Environment variables and local secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Jupyter notebooks
+.ipynb_checkpoints/
+
+# Runtime logs and temporary files
+logs/
+*.log
+*.tmp
+*.swp
+
+# Generated datasets, models, and predictions
+data/raw/
+data/processed/
+data/predictions/
+src/agents/data/
+src/agents/*.parquet
+*.joblib
+*.pkl
+*.pickle
+
+# Local IDE and OS metadata
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local Codex/agent configuration
+.agents/
+.codex/
