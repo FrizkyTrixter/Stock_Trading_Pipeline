@@ -1,0 +1,14 @@
+risk:
+  maximum_order_notional: "10000.00"
+  maximum_position_notional: "25000.00"
+  maximum_position_percent: "0.20"
+  maximum_gross_exposure: "0.80"
+  maximum_sector_exposure: "0.30"
+  maximum_open_positions: 20
+  minimum_cash_reserve: "1000.00"
+  maximum_daily_turnover: "25000.00"
+  maximum_daily_realized_loss: "1000.00"
+  maximum_drawdown: "0.10"
+  maximum_orders_per_day: 20
+  maximum_price_deviation: "0.02"
+  restricted_symbols: []
