@@ -1,0 +1,142 @@
+[
+  {
+    "Date": "2026-07-02",
+    "Ticker": "NXE",
+    "Close": 9.630000114440918,
+    "Probability": 0.9630081653594971,
+    "Suggested_Weight": 0.05288034677505493
+  },
+  {
+    "Date": "2026-07-02",
+    "Ticker": "DNN",
+    "Close": 3.200000047683716,
+    "Probability": 0.9578309655189514,
+    "Suggested_Weight": 0.05259605869650841
+  },
+  {
+    "Date": "2026-07-02",
+    "Ticker": "LEU",
+    "Close": 162.1300048828125,
+    "Probability": 0.9513641595840454,
+    "Suggested_Weight": 0.05224095657467842
+  },
+  {
+    "Date": "2026-07-02",
+    "Ticker": "RGTI",
+    "Close": 17.940000534057617,
+    "Probability": 0.9217252135276794,
+    "Suggested_Weight": 0.05061343312263489
+  },
+  {
+    "Date": "2026-07-02",
+    "Ticker": "DELL",
+    "Close": 394.32000732421875,
+    "Probability": 0.9205365180969238,
+    "Suggested_Weight": 0.05054815858602524
+  },
+  {
+    "Date": "2026-07-02",
+    "Ticker": "FIX",
+    "Close": 1741.300048828125,
+    "Probability": 0.9190636277198792,
+    "Suggested_Weight": 0.05046728253364563
+  },
+  {
+    "Date": "2026-07-02",
+    "Ticker": "MPWR",
+    "Close": 1288.1600341796875,
+    "Probability": 0.9066271781921387,
+    "Suggested_Weight": 0.049784377217292786
+  },
+  {
+    "Date": "2026-07-02",
+    "Ticker": "ORCL",
+    "Close": 140.27000427246094,
+    "Probability": 0.905979573726654,
+    "Suggested_Weight": 0.04974881559610367
+  },
+  {
+    "Date": "2026-07-02",
+    "Ticker": "RKLB",
+    "Close": 100.45999908447266,
+    "Probability": 0.9053370952606201,
+    "Suggested_Weight": 0.049713533371686935
+  },
+  {
+    "Date": "2026-07-02",
+    "Ticker": "LSCC",
+    "Close": 136.52999877929688,
+    "Probability": 0.9041902422904968,
+    "Suggested_Weight": 0.049650561064481735
+  },
+  {
+    "Date": "2026-07-02",
+    "Ticker": "SYM",
+    "Close": 42.7400016784668,
+    "Probability": 0.9031383395195007,
+    "Suggested_Weight": 0.049592796713113785
+  },
+  {
+    "Date": "2026-07-02",
+    "Ticker": "HPE",
+    "Close": 41.22999954223633,
+    "Probability": 0.8989686369895935,
+    "Suggested_Weight": 0.04936383292078972
+  },
+  {
+    "Date": "2026-07-02",
+    "Ticker": "SMR",
+    "Close": 9.760000228881836,
+    "Probability": 0.8988264799118042,
+    "Suggested_Weight": 0.04935602471232414
+  },
+  {
+    "Date": "2026-07-02",
+    "Ticker": "UUUU",
+    "Close": 13.8100004196167,
+    "Probability": 0.8978739976882935,
+    "Suggested_Weight": 0.049303725361824036
+  },
+  {
+    "Date": "2026-07-02",
+    "Ticker": "ON",
+    "Close": 91.22000122070312,
+    "Probability": 0.8973294496536255,
+    "Suggested_Weight": 0.04927382245659828
+  },
+  {
+    "Date": "2026-07-02",
+    "Ticker": "STM",
+    "Close": 68.3499984741211,
+    "Probability": 0.8970476388931274,
+    "Suggested_Weight": 0.04925834760069847
+  },
+  {
+    "Date": "2026-07-02",
+    "Ticker": "CRWV",
+    "Close": 81.74500274658203,
+    "Probability": 0.8924381732940674,
+    "Suggested_Weight": 0.049005232751369476
+  },
+  {
+    "Date": "2026-07-02",
+    "Ticker": "STX",
+    "Close": 820.1599731445312,
+    "Probability": 0.8912175297737122,
+    "Suggested_Weight": 0.04893820732831955
+  },
+  {
+    "Date": "2026-07-02",
+    "Ticker": "ASML",
+    "Close": 1769.3199462890625,
+    "Probability": 0.8909716010093689,
+    "Suggested_Weight": 0.048924703150987625
+  },
+  {
+    "Date": "2026-07-02",
+    "Ticker": "LITE",
+    "Close": 728.3200073242188,
+    "Probability": 0.8876044154167175,
+    "Suggested_Weight": 0.048739805817604065
+  }
+]
