@@ -1,0 +1,36 @@
+environment: development
+database_path: data/trading_system.db
+artifact_root: artifacts
+market_data_cache: data/cache/yahoo
+initial_capital: "100000.00"
+universe_size: 100
+universe_refresh: monthly
+investment_theme: AI infrastructure and configurable growth sectors
+llm_provider: openai
+llm_model: gpt-5.5
+model_version: xgboost-current
+model_probability_threshold: "0.60"
+allocation_policy: capped_probability_weighted
+benchmarks: [SPY, QQQ]
+yahoo_batch_size: 50
+yahoo_max_retries: 3
+yahoo_backoff_seconds: 1.0
+yahoo_rate_limit_seconds: 0.25
+market_data_max_age_seconds: 129600
+erp_account_external_id: simulated-portfolio
+risk:
+  maximum_order_notional: "10000.00"
+  maximum_position_notional: "25000.00"
+  maximum_position_percent: "0.20"
+  maximum_gross_exposure: "0.80"
+  maximum_sector_exposure: "0.35"
+  maximum_open_positions: 20
+  minimum_cash_reserve: "1000.00"
+  maximum_daily_turnover: "25000.00"
+  maximum_daily_realized_loss: "1000.00"
+  maximum_drawdown: "0.20"
+  maximum_orders_per_day: 40
+  maximum_price_deviation: "0.02"
+  stop_loss_percent: "0.08"
+  take_profit_percent: "0.30"
+  restricted_symbols: []

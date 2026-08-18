@@ -1,0 +1,13 @@
+name: Manual Strategy Run
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  run:
+    uses: ./.github/workflows/daily-market-cycle.yml
+    secrets: inherit

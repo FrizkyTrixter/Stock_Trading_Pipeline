@@ -1,0 +1,606 @@
+{
+  "strategy": "AI picks and shovels",
+  "universe_size": 100,
+  "tickers": [
+    {
+      "ticker": "NVDA",
+      "company": "NVIDIA Corp.",
+      "category": "AI accelerators",
+      "reason": "Core AI GPU, networking, systems, and AI-factory platform supplier."
+    },
+    {
+      "ticker": "AMD",
+      "company": "Advanced Micro Devices Inc.",
+      "category": "AI accelerators",
+      "reason": "GPU and CPU accelerator supplier for data-center AI compute."
+    },
+    {
+      "ticker": "AVGO",
+      "company": "Broadcom Inc.",
+      "category": "Semiconductors / networking ASICs",
+      "reason": "AI networking, custom silicon, switching, and infrastructure software exposure."
+    },
+    {
+      "ticker": "MRVL",
+      "company": "Marvell Technology Inc.",
+      "category": "AI networking silicon",
+      "reason": "Data-center interconnect, custom silicon, DSP, and optical connectivity exposure."
+    },
+    {
+      "ticker": "QCOM",
+      "company": "Qualcomm Inc.",
+      "category": "Semiconductors",
+      "reason": "Edge AI, on-device AI, connectivity, and inference silicon optionality."
+    },
+    {
+      "ticker": "INTC",
+      "company": "Intel Corp.",
+      "category": "Semiconductors / foundry",
+      "reason": "Foundry, CPU, AI accelerator, advanced packaging, and U.S. chip-capacity exposure."
+    },
+    {
+      "ticker": "ARM",
+      "company": "Arm Holdings plc",
+      "category": "Semiconductor IP",
+      "reason": "CPU and accelerator IP backbone for cloud, edge, and custom AI chips."
+    },
+    {
+      "ticker": "TSM",
+      "company": "Taiwan Semiconductor Manufacturing Co.",
+      "category": "Foundries",
+      "reason": "Advanced-node foundry for AI accelerators and high-performance chips."
+    },
+    {
+      "ticker": "ASML",
+      "company": "ASML Holding NV",
+      "category": "Semiconductor equipment",
+      "reason": "EUV lithography bottleneck supplier for leading-edge AI chips."
+    },
+    {
+      "ticker": "MU",
+      "company": "Micron Technology Inc.",
+      "category": "Memory and storage",
+      "reason": "HBM, DRAM, and NAND supplier leveraged to AI memory bandwidth demand."
+    },
+    {
+      "ticker": "NXPI",
+      "company": "NXP Semiconductors NV",
+      "category": "Semiconductors",
+      "reason": "Industrial and automotive embedded processing with edge AI exposure."
+    },
+    {
+      "ticker": "ON",
+      "company": "ON Semiconductor Corp.",
+      "category": "Power semiconductors",
+      "reason": "Power and sensing semiconductors for electrification and industrial infrastructure."
+    },
+    {
+      "ticker": "MCHP",
+      "company": "Microchip Technology Inc.",
+      "category": "Semiconductors",
+      "reason": "Microcontrollers, FPGAs, connectivity, and embedded industrial-control exposure."
+    },
+    {
+      "ticker": "ADI",
+      "company": "Analog Devices Inc.",
+      "category": "Semiconductors",
+      "reason": "Analog, mixed-signal, power, and sensing chips for industrial automation."
+    },
+    {
+      "ticker": "TXN",
+      "company": "Texas Instruments Inc.",
+      "category": "Semiconductors",
+      "reason": "Analog and embedded processors tied to industrial and power infrastructure."
+    },
+    {
+      "ticker": "MPWR",
+      "company": "Monolithic Power Systems Inc.",
+      "category": "Power semiconductors",
+      "reason": "High-efficiency power-management chips for AI servers and data-center hardware."
+    },
+    {
+      "ticker": "LSCC",
+      "company": "Lattice Semiconductor Corp.",
+      "category": "FPGA / edge AI",
+      "reason": "Low-power FPGAs for edge AI, industrial automation, and secure controls."
+    },
+    {
+      "ticker": "ALAB",
+      "company": "Astera Labs Inc.",
+      "category": "GPU supply chain / interconnects",
+      "reason": "Rack-scale AI infrastructure connectivity across CXL, PCIe, and Ethernet."
+    },
+    {
+      "ticker": "CRDO",
+      "company": "Credo Technology Group Holding Ltd.",
+      "category": "Optical/electrical interconnects",
+      "reason": "Active electrical cables, DSPs, SerDes, and optical connectivity for AI networks."
+    },
+    {
+      "ticker": "AEHR",
+      "company": "Aehr Test Systems",
+      "category": "Semiconductor equipment",
+      "reason": "Wafer-level burn-in and test systems for power and advanced chips."
+    },
+    {
+      "ticker": "AMAT",
+      "company": "Applied Materials Inc.",
+      "category": "Semiconductor equipment",
+      "reason": "Deposition, etch, inspection, and packaging tools for AI-chip manufacturing."
+    },
+    {
+      "ticker": "LRCX",
+      "company": "Lam Research Corp.",
+      "category": "Semiconductor equipment",
+      "reason": "Etch and deposition wafer-fab equipment for advanced logic and memory."
+    },
+    {
+      "ticker": "KLAC",
+      "company": "KLA Corp.",
+      "category": "Semiconductor equipment",
+      "reason": "Process control, metrology, inspection, and yield management for advanced chips."
+    },
+    {
+      "ticker": "TER",
+      "company": "Teradyne Inc.",
+      "category": "Semiconductor test / robotics",
+      "reason": "Automated test equipment for chips plus industrial robotics exposure."
+    },
+    {
+      "ticker": "ACLS",
+      "company": "Axcelis Technologies Inc.",
+      "category": "Semiconductor equipment",
+      "reason": "Ion-implant equipment supplier leveraged to semiconductor capex cycles."
+    },
+    {
+      "ticker": "CAMT",
+      "company": "Camtek Ltd.",
+      "category": "Advanced packaging / inspection",
+      "reason": "Inspection and metrology systems for advanced semiconductor packaging."
+    },
+    {
+      "ticker": "COHU",
+      "company": "Cohu Inc.",
+      "category": "Semiconductor test",
+      "reason": "Test and inspection handlers for the semiconductor supply chain."
+    },
+    {
+      "ticker": "ICHR",
+      "company": "Ichor Holdings Ltd.",
+      "category": "Semiconductor equipment supply chain",
+      "reason": "Fluid-delivery and subsystem supplier to wafer-fab equipment OEMs."
+    },
+    {
+      "ticker": "FORM",
+      "company": "FormFactor Inc.",
+      "category": "Semiconductor test",
+      "reason": "Probe cards and test systems for advanced logic and memory chips."
+    },
+    {
+      "ticker": "UCTT",
+      "company": "Ultra Clean Holdings Inc.",
+      "category": "Semiconductor equipment supply chain",
+      "reason": "Subsystems, precision cleaning, and manufacturing services for wafer-fab equipment."
+    },
+    {
+      "ticker": "MKSI",
+      "company": "MKS Inc.",
+      "category": "Semiconductor equipment components",
+      "reason": "Vacuum, photonics, lasers, and process-control subsystems for chip manufacturing."
+    },
+    {
+      "ticker": "ENTG",
+      "company": "Entegris Inc.",
+      "category": "Semiconductor materials",
+      "reason": "Specialty materials, filtration, and contamination control for advanced nodes."
+    },
+    {
+      "ticker": "VECO",
+      "company": "Veeco Instruments Inc.",
+      "category": "Semiconductor equipment",
+      "reason": "Deposition, laser annealing, and process equipment for chips and photonics."
+    },
+    {
+      "ticker": "ASX",
+      "company": "ASE Technology Holding Co.",
+      "category": "Advanced packaging",
+      "reason": "Outsourced semiconductor assembly, test, and advanced packaging for AI chips."
+    },
+    {
+      "ticker": "WDC",
+      "company": "Western Digital Corp.",
+      "category": "Memory and storage",
+      "reason": "Enterprise SSD and HDD storage leveraged to AI data growth."
+    },
+    {
+      "ticker": "STX",
+      "company": "Seagate Technology Holdings plc",
+      "category": "Memory and storage",
+      "reason": "High-capacity hard drives and mass storage for AI datasets and cloud infrastructure."
+    },
+    {
+      "ticker": "PSTG",
+      "company": "Everpure Inc. / formerly Pure Storage",
+      "category": "Memory and storage",
+      "reason": "Flash storage, data platform, cloud storage, and AI data-management exposure."
+    },
+    {
+      "ticker": "NTAP",
+      "company": "NetApp Inc.",
+      "category": "Memory and storage",
+      "reason": "Enterprise and cloud storage infrastructure for AI workloads."
+    },
+    {
+      "ticker": "DELL",
+      "company": "Dell Technologies Inc.",
+      "category": "Data-center systems",
+      "reason": "AI servers, storage, enterprise infrastructure, and GPU-cluster deployment exposure."
+    },
+    {
+      "ticker": "HPE",
+      "company": "Hewlett Packard Enterprise Co.",
+      "category": "Data-center systems / networking",
+      "reason": "Servers, AI systems, hybrid cloud, and expanded networking exposure."
+    },
+    {
+      "ticker": "SMCI",
+      "company": "Super Micro Computer Inc.",
+      "category": "AI servers",
+      "reason": "High-density AI server and rack-scale systems supplier."
+    },
+    {
+      "ticker": "ANET",
+      "company": "Arista Networks Inc.",
+      "category": "Networking",
+      "reason": "Cloud and AI data-center Ethernet switching leader."
+    },
+    {
+      "ticker": "CSCO",
+      "company": "Cisco Systems Inc.",
+      "category": "Networking",
+      "reason": "Switching, routing, security, and AI data-center network modernization exposure."
+    },
+    {
+      "ticker": "CIEN",
+      "company": "Ciena Corp.",
+      "category": "Optical interconnects",
+      "reason": "Optical transport and coherent networking for cloud and AI backbone demand."
+    },
+    {
+      "ticker": "COHR",
+      "company": "Coherent Corp.",
+      "category": "Optical interconnects",
+      "reason": "Optical components, lasers, transceivers, and photonics for AI data-center networks."
+    },
+    {
+      "ticker": "LITE",
+      "company": "Lumentum Holdings Inc.",
+      "category": "Optical interconnects",
+      "reason": "Optical components, lasers, and datacom photonics exposure."
+    },
+    {
+      "ticker": "NOK",
+      "company": "Nokia Corp.",
+      "category": "Networking",
+      "reason": "Optical, IP, and AI-native data-center networking exposure."
+    },
+    {
+      "ticker": "ERIC",
+      "company": "Ericsson",
+      "category": "Networking",
+      "reason": "Telecom infrastructure, private networks, edge compute, and network automation demand."
+    },
+    {
+      "ticker": "MSFT",
+      "company": "Microsoft Corp.",
+      "category": "Cloud computing",
+      "reason": "Azure AI infrastructure, hyperscale data centers, and enterprise AI platform."
+    },
+    {
+      "ticker": "GOOGL",
+      "company": "Alphabet Inc.",
+      "category": "Cloud computing",
+      "reason": "Google Cloud, TPU infrastructure, AI platforms, data centers, and networking."
+    },
+    {
+      "ticker": "AMZN",
+      "company": "Amazon.com Inc.",
+      "category": "Cloud computing",
+      "reason": "AWS AI infrastructure, custom chips, data centers, and AI cloud services."
+    },
+    {
+      "ticker": "ORCL",
+      "company": "Oracle Corp.",
+      "category": "Cloud computing",
+      "reason": "Oracle Cloud Infrastructure, GPU demand, and data-center expansion."
+    },
+    {
+      "ticker": "SNOW",
+      "company": "Snowflake Inc.",
+      "category": "AI software infrastructure",
+      "reason": "AI Data Cloud platform for analytics, data engineering, applications, and AI."
+    },
+    {
+      "ticker": "DDOG",
+      "company": "Datadog Inc.",
+      "category": "AI software infrastructure",
+      "reason": "Cloud observability and monitoring for AI and data-center software stacks."
+    },
+    {
+      "ticker": "NET",
+      "company": "Cloudflare Inc.",
+      "category": "Networking / AI software infrastructure",
+      "reason": "Global edge network, security, developer platform, and inference networking optionality."
+    },
+    {
+      "ticker": "PLTR",
+      "company": "Palantir Technologies Inc.",
+      "category": "AI software infrastructure",
+      "reason": "Enterprise AI operations, data integration, and defense and industrial analytics."
+    },
+    {
+      "ticker": "AI",
+      "company": "C3.ai Inc.",
+      "category": "AI software infrastructure",
+      "reason": "Enterprise AI applications and model-operations exposure."
+    },
+    {
+      "ticker": "CRWD",
+      "company": "CrowdStrike Holdings Inc.",
+      "category": "Cybersecurity",
+      "reason": "AI and cloud-native endpoint, identity, cloud, and security-operations platform."
+    },
+    {
+      "ticker": "PANW",
+      "company": "Palo Alto Networks Inc.",
+      "category": "Cybersecurity",
+      "reason": "AI-powered network, cloud, endpoint, and identity security platform."
+    },
+    {
+      "ticker": "ZS",
+      "company": "Zscaler Inc.",
+      "category": "Cybersecurity",
+      "reason": "Zero-trust cloud security platform for AI-era workflows."
+    },
+    {
+      "ticker": "OKTA",
+      "company": "Okta Inc.",
+      "category": "Cybersecurity",
+      "reason": "Identity and access-management platform for cloud and AI enterprise security."
+    },
+    {
+      "ticker": "S",
+      "company": "SentinelOne Inc.",
+      "category": "Cybersecurity",
+      "reason": "AI-driven endpoint and autonomous security platform."
+    },
+    {
+      "ticker": "TENB",
+      "company": "Tenable Holdings Inc.",
+      "category": "Cybersecurity",
+      "reason": "Vulnerability exposure management for enterprise and cloud infrastructure."
+    },
+    {
+      "ticker": "FTNT",
+      "company": "Fortinet Inc.",
+      "category": "Cybersecurity / networking",
+      "reason": "Network security appliances and software for cloud, edge, and data-center environments."
+    },
+    {
+      "ticker": "RBRK",
+      "company": "Rubrik Inc.",
+      "category": "Cybersecurity / data resilience",
+      "reason": "Cyber resilience, data security, AI-agent protection, and cloud data recovery."
+    },
+    {
+      "ticker": "IOT",
+      "company": "Samsara Inc.",
+      "category": "Industrial automation",
+      "reason": "Connected operations, fleet IoT, and physical-operations AI data layer."
+    },
+    {
+      "ticker": "ROK",
+      "company": "Rockwell Automation Inc.",
+      "category": "Industrial automation",
+      "reason": "Factory automation, controls, sensors, and industrial AI modernization."
+    },
+    {
+      "ticker": "EMR",
+      "company": "Emerson Electric Co.",
+      "category": "Industrial automation",
+      "reason": "Control systems, instrumentation, automation, and industrial software exposure."
+    },
+    {
+      "ticker": "HON",
+      "company": "Honeywell International Inc.",
+      "category": "Industrial automation",
+      "reason": "Automation, aerospace systems, quantum/control optionality, and industrial digitization."
+    },
+    {
+      "ticker": "SYM",
+      "company": "Symbotic Inc.",
+      "category": "Robotics",
+      "reason": "Warehouse automation and AI-enabled robotics for logistics infrastructure."
+    },
+    {
+      "ticker": "CGNX",
+      "company": "Cognex Corp.",
+      "category": "Robotics / machine vision",
+      "reason": "Machine vision and industrial inspection for factory automation."
+    },
+    {
+      "ticker": "IONQ",
+      "company": "IonQ Inc.",
+      "category": "Quantum computing",
+      "reason": "Pure-play quantum computing, networking, sensing, and quantum-security exposure."
+    },
+    {
+      "ticker": "RGTI",
+      "company": "Rigetti Computing Inc.",
+      "category": "Quantum computing",
+      "reason": "Full-stack superconducting quantum computing and quantum cloud services."
+    },
+    {
+      "ticker": "QBTS",
+      "company": "D-Wave Quantum Inc.",
+      "category": "Quantum computing",
+      "reason": "Quantum annealing and gate-model systems, software, and services."
+    },
+    {
+      "ticker": "QUBT",
+      "company": "Quantum Computing Inc.",
+      "category": "Quantum computing",
+      "reason": "Speculative quantum photonics and optimization hardware and software exposure."
+    },
+    {
+      "ticker": "RKLB",
+      "company": "Rocket Lab Corp.",
+      "category": "Space infrastructure",
+      "reason": "Launch services, spacecraft, components, and end-to-end space systems."
+    },
+    {
+      "ticker": "ASTS",
+      "company": "AST SpaceMobile Inc.",
+      "category": "Space infrastructure",
+      "reason": "Space-based cellular broadband network and satellite/ground infrastructure."
+    },
+    {
+      "ticker": "VRT",
+      "company": "Vertiv Holdings Co.",
+      "category": "Data centers / cooling / power",
+      "reason": "Critical power, thermal management, racks, and AI data-center infrastructure."
+    },
+    {
+      "ticker": "ETN",
+      "company": "Eaton Corp. plc",
+      "category": "Electrical equipment",
+      "reason": "Power management, switchgear, distribution, and AI data-center electrification."
+    },
+    {
+      "ticker": "PWR",
+      "company": "Quanta Services Inc.",
+      "category": "Grid infrastructure",
+      "reason": "Electric transmission, utility infrastructure, grid modernization, and data-center power buildout."
+    },
+    {
+      "ticker": "EME",
+      "company": "EMCOR Group Inc.",
+      "category": "Data centers / electrical contracting",
+      "reason": "Mechanical and electrical construction services for mission-critical facilities."
+    },
+    {
+      "ticker": "FIX",
+      "company": "Comfort Systems USA Inc.",
+      "category": "Cooling systems / electrical contracting",
+      "reason": "HVAC, mechanical, electrical, and controls services tied to data-center demand."
+    },
+    {
+      "ticker": "STRL",
+      "company": "Sterling Infrastructure Inc.",
+      "category": "Grid / data-center infrastructure",
+      "reason": "E-infrastructure construction exposure, including mission-critical site work."
+    },
+    {
+      "ticker": "FLNC",
+      "company": "Fluence Energy Inc.",
+      "category": "Energy storage",
+      "reason": "Grid-scale battery storage, digital energy management, and renewable integration."
+    },
+    {
+      "ticker": "GNRC",
+      "company": "Generac Holdings Inc.",
+      "category": "Power generation",
+      "reason": "Backup and distributed generation for commercial sites and infrastructure resilience."
+    },
+    {
+      "ticker": "CEG",
+      "company": "Constellation Energy Corp.",
+      "category": "Nuclear energy / power generation",
+      "reason": "Large U.S. nuclear fleet positioned for AI data-center electricity demand."
+    },
+    {
+      "ticker": "VST",
+      "company": "Vistra Corp.",
+      "category": "Power generation",
+      "reason": "Integrated power generation and retail electricity exposure to tightening power markets."
+    },
+    {
+      "ticker": "GEV",
+      "company": "GE Vernova Inc.",
+      "category": "Grid infrastructure / power equipment",
+      "reason": "Grid systems, electrification, power generation, and data-center equipment orders."
+    },
+    {
+      "ticker": "CCJ",
+      "company": "Cameco Corp.",
+      "category": "Nuclear fuel / uranium",
+      "reason": "Uranium and nuclear fuel-cycle supplier leveraged to nuclear-power demand."
+    },
+    {
+      "ticker": "UEC",
+      "company": "Uranium Energy Corp.",
+      "category": "Nuclear fuel / uranium",
+      "reason": "U.S.-focused uranium exposure for nuclear fuel supply security."
+    },
+    {
+      "ticker": "SMR",
+      "company": "NuScale Power Corp.",
+      "category": "Nuclear energy",
+      "reason": "Small modular reactor developer with AI-power narrative exposure."
+    },
+    {
+      "ticker": "BWXT",
+      "company": "BWX Technologies Inc.",
+      "category": "Nuclear energy",
+      "reason": "Nuclear components, reactors, fuel, and nuclear engineering exposure."
+    },
+    {
+      "ticker": "LEU",
+      "company": "Centrus Energy Corp.",
+      "category": "Nuclear fuel",
+      "reason": "Uranium enrichment and HALEU fuel-cycle exposure."
+    },
+    {
+      "ticker": "NNE",
+      "company": "Nano Nuclear Energy Inc.",
+      "category": "Nuclear energy",
+      "reason": "Speculative microreactor and advanced nuclear technology exposure."
+    },
+    {
+      "ticker": "OKLO",
+      "company": "Oklo Inc.",
+      "category": "Nuclear energy",
+      "reason": "Advanced nuclear developer tied to data-center baseload-power demand."
+    },
+    {
+      "ticker": "MP",
+      "company": "MP Materials Corp.",
+      "category": "Rare earths / critical minerals",
+      "reason": "U.S. rare-earth mining and magnet supply-chain exposure."
+    },
+    {
+      "ticker": "ALB",
+      "company": "Albemarle Corp.",
+      "category": "Critical minerals / energy storage",
+      "reason": "Lithium supplier tied to batteries, grid storage, and electrification."
+    },
+    {
+      "ticker": "FCX",
+      "company": "Freeport-McMoRan Inc.",
+      "category": "Critical minerals / copper",
+      "reason": "Copper supply exposure for power grids, data centers, and electrification."
+    },
+    {
+      "ticker": "SCCO",
+      "company": "Southern Copper Corp.",
+      "category": "Critical minerals / copper",
+      "reason": "Copper producer tied to grid expansion and AI data-center power buildout."
+    },
+    {
+      "ticker": "UUUU",
+      "company": "Energy Fuels Inc.",
+      "category": "Uranium / rare earths",
+      "reason": "Uranium and rare-earth processing exposure for nuclear and critical-minerals supply chains."
+    }
+  ]
+}

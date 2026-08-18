@@ -1,0 +1,43 @@
+﻿{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/contracts/investment-export-v1.schema.json",
+  "title": "Investment ERP Export Batch v1",
+  "type": "object",
+  "required": ["schema_version", "batch_id", "source_system", "account_external_id", "events", "content_hash"],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "batch_id": {"type": "string", "minLength": 8},
+    "source_system": {"const": "stock-trading-pipeline"},
+    "account_external_id": {"type": "string", "minLength": 1},
+    "content_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "signature": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["event_external_id", "event_type", "effective_at", "currency", "description", "content_hash"],
+        "properties": {
+          "event_external_id": {"type": "string", "minLength": 1},
+          "event_type": {"enum": ["account_snapshot", "cash_balance", "position_snapshot", "security", "order", "fill", "fee", "realized_gain_loss", "dividend", "transfer", "valuation_snapshot", "correction", "STRATEGY_RUN", "UNIVERSE_RESEARCH", "UNIVERSE_MEMBER", "RESEARCH_SOURCE", "MODEL_SIGNAL", "CAPITAL_ALLOCATION", "TRADE_DECISION", "TRADE_BUY", "TRADE_SELL", "STOP_LOSS_EXIT", "TAKE_PROFIT_EXIT", "PORTFOLIO_SNAPSHOT", "DAILY_ANALYTICS", "BENCHMARK_SNAPSHOT"]},
+          "effective_at": {"type": "string", "format": "date-time"},
+          "currency": {"type": "string", "pattern": "^[A-Z]{3}$"},
+          "symbol": {"type": ["string", "null"]},
+          "quantity": {"type": ["string", "null"], "pattern": "^-?[0-9]+(\\.[0-9]+)?$"},
+          "unit_price": {"type": ["string", "null"], "pattern": "^-?[0-9]+(\\.[0-9]+)?$"},
+          "gross_amount": {"type": ["string", "null"], "pattern": "^-?[0-9]+(\\.[0-9]+)?$"},
+          "fee_amount": {"type": "string", "pattern": "^-?[0-9]+(\\.[0-9]+)?$"},
+          "net_amount": {"type": ["string", "null"], "pattern": "^-?[0-9]+(\\.[0-9]+)?$"},
+          "order_id": {"type": ["string", "null"]},
+          "fill_id": {"type": ["string", "null"]},
+          "description": {"type": "string", "minLength": 1},
+          "metadata": {"type": "object", "additionalProperties": true},
+          "content_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}
+
+
