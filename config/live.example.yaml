@@ -1,0 +1,10 @@
+# This example cannot enable live execution by itself. Environment flags, credentials,
+# exact human approval, risk approval, freshness, adapter capability, test evidence,
+# idempotency, inactive kill switch, and warning acknowledgement are also required.
+trading_mode: live
+enable_live_trading: false
+live_adapter_enabled: false
+live_execution_tests_passed: false
+live_warning_acknowledged: false
+paper_auto_approve: false
+
