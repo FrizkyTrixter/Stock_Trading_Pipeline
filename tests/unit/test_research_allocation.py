@@ -44,6 +44,8 @@ class Provider:
                             "published_at": None,
                         }
                     ],
+                    "categories": ["chips_semiconductors"],
+                    "feedback_loop_rationale": "Compounds AI infrastructure capacity",
                 }
             )
         return rows

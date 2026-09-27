@@ -28,6 +28,22 @@ class RiskLimits(BaseModel):
     restricted_symbols: tuple[str, ...] = ()
 
 
+class AIInfrastructureAuditConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    capture_loop_fields: bool = True
+
+
+class AIInfrastructurePolicyConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    enabled: bool = False
+    categories: tuple[str, ...] = ()
+    target_counts: dict[str, int] = Field(default_factory=dict)
+    min_per_category: dict[str, int] = Field(default_factory=dict)
+    max_per_category: dict[str, int] = Field(default_factory=dict)
+    allow_multi_tag: bool = True
+    audit: AIInfrastructureAuditConfig = Field(default_factory=AIInfrastructureAuditConfig)
+
+
 class Settings(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     environment: str = "development"
@@ -43,6 +59,9 @@ class Settings(BaseModel):
     model_version: str = "xgboost-current"
     model_probability_threshold: Decimal = Field(default=Decimal("0.60"), ge=0, le=1)
     allocation_policy: str = "capped_probability_weighted"
+    ai_infrastructure: AIInfrastructurePolicyConfig = Field(
+        default_factory=AIInfrastructurePolicyConfig
+    )
     benchmarks: tuple[str, ...] = ("SPY", "QQQ")
     yahoo_batch_size: int = Field(default=50, ge=1, le=200)
     yahoo_max_retries: int = Field(default=3, ge=1, le=10)
