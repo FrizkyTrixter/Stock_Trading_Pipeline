@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from trading_system.config import AIInfrastructurePolicyConfig
 from trading_system.features import (
     EMBARGO_SESSIONS,
     HORIZON,
@@ -14,7 +15,10 @@ from trading_system.features import (
     feature_columns,
     leakage_audit,
 )
+from trading_system.market_data import FakeMarketDataProvider
 from trading_system.news import DeterministicNewsAnalyzer, deduplicate_and_filter, validate_evidence
+from trading_system.research import ResearchMember, UniverseResearchService, universe_json_schema
+from trading_system.storage import Storage
 from trading_system.types import NewsArticle, TickerCandidate, UniverseProposal
 from trading_system.universe import UniversePolicy
 
@@ -113,3 +117,146 @@ def test_news_deduplication_injection_defense_and_evidence_validation() -> None:
     )
     with pytest.raises(ValueError, match="Fabricated"):
         validate_evidence(fabricated, articles)
+
+
+class _Provider:
+    provider_name = "fixture"
+    model_name = "fixture-llm"
+
+    def research(self, prompt, *, repair_feedback=None):  # noqa: ANN001
+        return []
+
+
+def _market_for(tickers: tuple[str, ...]) -> FakeMarketDataProvider:
+    return FakeMarketDataProvider(
+        pd.DataFrame(
+            {
+                "Date": [datetime(2026, 8, 17, tzinfo=UTC)] * len(tickers),
+                "Ticker": list(tickers),
+                "Open": [10] * len(tickers),
+                "High": [11] * len(tickers),
+                "Low": [9] * len(tickers),
+                "Close": [10] * len(tickers),
+                "Volume": [1000] * len(tickers),
+            }
+        )
+    )
+
+
+def _member(rank: int, ticker: str, categories: tuple[str, ...]) -> dict[str, object]:
+    return {
+        "ticker": ticker,
+        "company_name": f"{ticker} Corp",
+        "rank": rank,
+        "sector": "Technology",
+        "category": "Infrastructure",
+        "reason": "AI infrastructure fit",
+        "thesis": "Compounding demand",
+        "catalysts": ["Scale"],
+        "risks": ["Competition"],
+        "confidence": 0.8,
+        "sources": [],
+        "categories": list(categories),
+        "feedback_loop_rationale": "Supports loop",
+    }
+
+
+def test_research_member_rejects_unknown_category() -> None:
+    with pytest.raises(ValueError, match="unknown AI infrastructure categories"):
+        ResearchMember.model_validate(_member(1, "AAA", ("unknown_bucket",)))
+
+
+def test_validate_rejects_untagged_when_ai_infra_enabled(tmp_path) -> None:
+    service = UniverseResearchService(
+        Storage(tmp_path / "state.db"),
+        _market_for(("AAA", "BBB")),
+        _Provider(),
+        "theme",
+        universe_size=2,
+        ai_infrastructure=AIInfrastructurePolicyConfig(
+            enabled=True,
+            categories=("chips_semiconductors",),
+            min_per_category={"chips_semiconductors": 1},
+            max_per_category={"chips_semiconductors": 2},
+        ),
+    )
+    with pytest.raises(ValueError, match="untagged AI-infra members"):
+        service.validate(
+            [
+                _member(1, "AAA", ()),
+                _member(2, "BBB", ("chips_semiconductors",)),
+            ]
+        )
+
+
+def test_validate_rejects_min_max_violations(tmp_path) -> None:
+    minimum_service = UniverseResearchService(
+        Storage(tmp_path / "min.db"),
+        _market_for(("AAA", "BBB")),
+        _Provider(),
+        "theme",
+        universe_size=2,
+        ai_infrastructure=AIInfrastructurePolicyConfig(
+            enabled=True,
+            categories=("chips_semiconductors", "cloud_hyperscalers"),
+            min_per_category={"cloud_hyperscalers": 1},
+            max_per_category={"chips_semiconductors": 1},
+        ),
+    )
+    with pytest.raises(ValueError, match="below minimum"):
+        minimum_service.validate(
+            [
+                _member(1, "AAA", ("chips_semiconductors",)),
+                _member(2, "BBB", ("chips_semiconductors",)),
+            ]
+        )
+    maximum_service = UniverseResearchService(
+        Storage(tmp_path / "max.db"),
+        _market_for(("AAA", "BBB")),
+        _Provider(),
+        "theme",
+        universe_size=2,
+        ai_infrastructure=AIInfrastructurePolicyConfig(
+            enabled=True,
+            categories=("chips_semiconductors",),
+            min_per_category={"chips_semiconductors": 1},
+            max_per_category={"chips_semiconductors": 1},
+        ),
+    )
+    with pytest.raises(ValueError, match="above maximum"):
+        maximum_service.validate(
+            [
+                _member(1, "AAA", ("chips_semiconductors",)),
+                _member(2, "BBB", ("chips_semiconductors",)),
+            ]
+        )
+
+
+def test_universe_schema_preserves_strict_mode_for_new_fields() -> None:
+    schema = universe_json_schema()
+    member = schema["properties"]["stocks"]["items"]
+    assert member["additionalProperties"] is False
+    assert "categories" in member["required"]
+    assert "feedback_loop_rationale" in member["required"]
+
+
+def test_persist_round_trip_writes_14_columns(tmp_path) -> None:
+    storage = Storage(tmp_path / "persist.db")
+    service = UniverseResearchService(
+        storage, _market_for(("AAA",)), _Provider(), "theme", universe_size=1
+    )
+    run_id = service.persist(
+        "2026-08",
+        (
+            ResearchMember.model_validate(
+                _member(1, "AAA", ("chips_semiconductors", "networking_interconnect"))
+            ),
+        ),
+        replace=False,
+    )
+    row = storage.universe_members(run_id)[0]
+    assert (
+        row["ai_infra_categories_json"]
+        == '["chips_semiconductors", "networking_interconnect"]'
+    )
+    assert row["feedback_loop_rationale"] == "Supports loop"

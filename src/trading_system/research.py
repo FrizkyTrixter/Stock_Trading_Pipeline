@@ -4,17 +4,21 @@ from __future__ import annotations
 
 import json
 import re
+from collections import Counter
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
 
+from .ai_feedback_loop import AIInfraCategory, build_category_targets
+from .config import AIInfrastructurePolicyConfig
 from .ids import new_id
 from .market_data import MarketDataProvider
 from .storage import Storage
 
 TICKER = re.compile(r"^[A-Z][A-Z0-9.-]{0,11}$")
+_VALID_AI_CATEGORIES = frozenset(item.value for item in AIInfraCategory)
 
 
 class ResearchSource(BaseModel):
@@ -38,6 +42,8 @@ class ResearchMember(BaseModel):
     risks: tuple[str, ...]
     confidence: Decimal | None = Field(default=None, ge=0, le=1)
     sources: tuple[ResearchSource, ...] = ()
+    categories: tuple[str, ...] = ()
+    feedback_loop_rationale: str | None = None
 
     @field_validator("ticker")
     @classmethod
@@ -46,6 +52,15 @@ class ResearchMember(BaseModel):
         if not TICKER.fullmatch(value):
             raise ValueError("malformed ticker")
         return value
+
+    @field_validator("categories")
+    @classmethod
+    def validate_categories(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        normalized = tuple(dict.fromkeys(item.strip() for item in value if item.strip()))
+        unknown = sorted(item for item in normalized if item not in _VALID_AI_CATEGORIES)
+        if unknown:
+            raise ValueError(f"unknown AI infrastructure categories: {', '.join(unknown)}")
+        return normalized
 
 
 class UniverseResearchProvider(Protocol):
@@ -118,6 +133,8 @@ def universe_json_schema() -> dict[str, Any]:
             "risks": {"type": "array", "items": {"type": "string"}},
             "confidence": {"type": ["number", "null"]},
             "sources": {"type": "array", "items": source},
+            "categories": {"type": "array", "items": {"type": "string"}},
+            "feedback_loop_rationale": {"type": ["string", "null"]},
         },
         "required": [
             "ticker",
@@ -131,6 +148,8 @@ def universe_json_schema() -> dict[str, Any]:
             "risks",
             "confidence",
             "sources",
+            "categories",
+            "feedback_loop_rationale",
         ],
     }
     return {
@@ -144,7 +163,7 @@ def universe_json_schema() -> dict[str, Any]:
 
 
 class UniverseResearchService:
-    prompt_version = "monthly-universe-v2"
+    prompt_version = "monthly-universe-v3"
 
     def __init__(
         self,
@@ -153,12 +172,14 @@ class UniverseResearchService:
         provider: UniverseResearchProvider,
         theme: str,
         universe_size: int = 100,
+        ai_infrastructure: AIInfrastructurePolicyConfig | None = None,
     ) -> None:
         self.storage = storage
         self.market_data = market_data
         self.provider = provider
         self.theme = theme
         self.universe_size = universe_size
+        self.ai_infrastructure = ai_infrastructure or AIInfrastructurePolicyConfig()
 
     @staticmethod
     def period_for(value: date | None = None) -> str:
@@ -170,9 +191,10 @@ class UniverseResearchService:
             f"Which exactly 100 publicly traded stocks should this quantitative strategy actively "
             f"monitor during {period} based on the investment thesis '{self.theme}' and current "
             "available information? Return unique common-stock tickers, company, rank 1-100, "
-            "sector, category, concise reason, thesis, catalysts, risks, confidence, and real "
-            "verifiable source "
-            "metadata. Do not invent URLs. AI researches; it does not size or execute trades."
+            "sector, category, concise reason, thesis, catalysts, risks, confidence, real "
+            "verifiable source metadata, AI-infrastructure category tags, and a one-line "
+            "feedback-loop rationale. Do not invent URLs. AI researches; it does not size "
+            "or execute trades."
         )
 
     def run(self, *, period: str | None = None, force: bool = False, max_attempts: int = 3) -> str:
@@ -192,6 +214,36 @@ class UniverseResearchService:
                 feedback = str(exc)
         raise ValueError(f"Could not create an exact valid universe: {last_error}")
 
+    def build_ai_infra_candidate_pool(self, as_of_date: date) -> tuple[dict[str, Any], ...]:
+        period = self.period_for(as_of_date)
+        run = self.storage.row(
+            "SELECT id FROM universe_runs WHERE status='completed' AND period<=? "
+            "ORDER BY period DESC LIMIT 1",
+            (period,),
+        )
+        if run is None:
+            return ()
+        rows = self.storage.universe_members(str(run["id"]))
+        scored: list[dict[str, Any]] = []
+        for row in rows:
+            copy = dict(row)
+            copy["categories"] = tuple(json.loads(copy.get("ai_infra_categories_json") or "[]"))
+            copy["score"] = self.score_ai_feedback_alignment(copy)
+            scored.append(copy)
+        scored.sort(key=lambda item: (-item["score"], int(item["rank"]), str(item["ticker"])))
+        return tuple(scored)
+
+    def score_ai_feedback_alignment(self, candidate: ResearchMember | dict[str, Any]) -> Decimal:
+        if isinstance(candidate, ResearchMember):
+            categories = candidate.categories
+            confidence = candidate.confidence or Decimal("0")
+        else:
+            categories = tuple(str(item) for item in candidate.get("categories") or ())
+            raw = candidate.get("confidence")
+            confidence = Decimal(str(raw)) if raw is not None else Decimal("0")
+        category_score = Decimal(len(set(categories))) / Decimal(max(len(_VALID_AI_CATEGORIES), 1))
+        return (category_score + confidence) / Decimal("2")
+
     def validate(self, raw: list[dict[str, Any]]) -> tuple[ResearchMember, ...]:
         members = tuple(ResearchMember.model_validate(item) for item in raw)
         if len(members) != self.universe_size:
@@ -204,6 +256,41 @@ class UniverseResearchService:
             raise ValueError("duplicate tickers: " + ", ".join(duplicates))
         if sorted(item.rank for item in members) != list(range(1, self.universe_size + 1)):
             raise ValueError("ranks must be unique and cover 1 through 100")
+
+        if self.ai_infrastructure.enabled:
+            if not self.ai_infrastructure.allow_multi_tag:
+                multi = sorted(item.ticker for item in members if len(item.categories) > 1)
+                if multi:
+                    raise ValueError("multi-tagged members are not allowed: " + ", ".join(multi))
+            untagged = sorted(item.ticker for item in members if not item.categories)
+            if untagged:
+                raise ValueError("untagged AI-infra members: " + ", ".join(untagged))
+            allowed = set(self.ai_infrastructure.categories)
+            unknown = sorted(
+                {
+                    category
+                    for member in members
+                    for category in member.categories
+                    if allowed and category not in allowed
+                }
+            )
+            if unknown:
+                raise ValueError("categories outside configured AI infra list: " + ", ".join(unknown))
+            counts: Counter[str] = Counter(
+                category for member in members for category in member.categories
+            )
+            for category, minimum in self.ai_infrastructure.min_per_category.items():
+                if counts.get(category, 0) < minimum:
+                    raise ValueError(
+                        f"category {category} below minimum {minimum}: {counts.get(category, 0)}"
+                    )
+            for category, maximum in self.ai_infrastructure.max_per_category.items():
+                if counts.get(category, 0) > maximum:
+                    raise ValueError(
+                        f"category {category} above maximum {maximum}: {counts.get(category, 0)}"
+                    )
+            build_category_targets(self.ai_infrastructure)
+
         prices = self.market_data.latest(tickers)
         invalid = sorted(
             ticker for ticker in tickers if ticker not in prices or not prices[ticker].available
@@ -237,7 +324,11 @@ class UniverseResearchService:
             )
             for item in members:
                 db.execute(
-                    "INSERT INTO universe_members VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO universe_members ("
+                    "universe_run_id, ticker, company_name, rank, sector, category, reason, thesis, "
+                    "catalysts_json, risks_json, confidence, researched_at, ai_infra_categories_json, "
+                    "feedback_loop_rationale"
+                    ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         run_id,
                         item.ticker,
@@ -251,6 +342,8 @@ class UniverseResearchService:
                         json.dumps(item.risks),
                         str(item.confidence) if item.confidence is not None else None,
                         now,
+                        json.dumps(item.categories),
+                        item.feedback_loop_rationale,
                     ),
                 )
                 for source in item.sources:

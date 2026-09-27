@@ -5,7 +5,40 @@ market_data_cache: data/cache/yahoo
 initial_capital: "100000.00"
 universe_size: 100
 universe_refresh: monthly
-investment_theme: AI infrastructure and configurable growth sectors
+investment_theme: "AI investing in itself: capital compounds through AI infrastructure leadership"
+ai_infrastructure:
+  enabled: true
+  categories:
+    - chips_semiconductors
+    - data_centers_compute
+    - cloud_hyperscalers
+    - ai_models_labs_platforms
+    - networking_interconnect
+    - power_energy_for_ai
+  target_counts:
+    chips_semiconductors: 24
+    data_centers_compute: 16
+    cloud_hyperscalers: 16
+    ai_models_labs_platforms: 14
+    networking_interconnect: 15
+    power_energy_for_ai: 15
+  min_per_category:
+    chips_semiconductors: 12
+    data_centers_compute: 8
+    cloud_hyperscalers: 8
+    ai_models_labs_platforms: 6
+    networking_interconnect: 6
+    power_energy_for_ai: 6
+  max_per_category:
+    chips_semiconductors: 35
+    data_centers_compute: 30
+    cloud_hyperscalers: 30
+    ai_models_labs_platforms: 25
+    networking_interconnect: 25
+    power_energy_for_ai: 25
+  allow_multi_tag: true
+  audit:
+    capture_loop_fields: true
 llm_provider: openai
 llm_model: gpt-5.5
 model_version: xgboost-current

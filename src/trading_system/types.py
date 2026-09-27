@@ -59,6 +59,7 @@ class TickerCandidate(Record):
     rationale: str
     catalysts: tuple[str, ...] = ()
     risks: tuple[str, ...] = ()
+    categories: tuple[str, ...] = ()
     confidence: Decimal = Decimal("0")
 
     @field_validator("ticker")

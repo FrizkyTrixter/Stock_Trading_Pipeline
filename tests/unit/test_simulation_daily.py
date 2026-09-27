@@ -104,7 +104,7 @@ def seeded_storage(path):
         for rank in range(1, 101):
             ticker = f"T{rank:03d}"
             db.execute(
-                "INSERT INTO universe_members VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO universe_members VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     "u1",
                     ticker,
@@ -118,6 +118,8 @@ def seeded_storage(path):
                     "[]",
                     "0.8",
                     now,
+                    "[]",
+                    None,
                 ),
             )
     return storage

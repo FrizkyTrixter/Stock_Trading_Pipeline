@@ -71,6 +71,7 @@ def main(argv: list[str] | None = None) -> int:
                 provider,
                 settings.investment_theme,
                 settings.universe_size,
+                settings.ai_infrastructure,
             )
             run_id = service.run(period=args.period, force=args.force)
             run = storage.row("SELECT * FROM universe_runs WHERE id=?", (run_id,))

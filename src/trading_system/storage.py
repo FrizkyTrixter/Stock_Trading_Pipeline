@@ -44,6 +44,8 @@ CREATE TABLE IF NOT EXISTS universe_members (
   rank INTEGER NOT NULL, sector TEXT NOT NULL, category TEXT NOT NULL,
   reason TEXT NOT NULL, thesis TEXT NOT NULL, catalysts_json TEXT NOT NULL,
   risks_json TEXT NOT NULL, confidence TEXT, researched_at TEXT NOT NULL,
+  ai_infra_categories_json TEXT NOT NULL DEFAULT '[]',
+  feedback_loop_rationale TEXT,
   PRIMARY KEY(universe_run_id, ticker), UNIQUE(universe_run_id, rank),
   FOREIGN KEY(universe_run_id) REFERENCES universe_runs(id)
 );
@@ -114,9 +116,25 @@ class Storage:
         self.connection = sqlite3.connect(self.path)
         self.connection.row_factory = sqlite3.Row
         self.connection.executescript(SCHEMA)
+        self._ensure_universe_member_columns()
 
     def close(self) -> None:
         self.connection.close()
+
+    def _ensure_universe_member_columns(self) -> None:
+        columns = {
+            row["name"] for row in self.connection.execute("PRAGMA table_info(universe_members)")
+        }
+        if "ai_infra_categories_json" not in columns:
+            self.connection.execute(
+                "ALTER TABLE universe_members "
+                "ADD COLUMN ai_infra_categories_json TEXT NOT NULL DEFAULT '[]'"
+            )
+        if "feedback_loop_rationale" not in columns:
+            self.connection.execute(
+                "ALTER TABLE universe_members ADD COLUMN feedback_loop_rationale TEXT"
+            )
+        self.connection.commit()
 
     @contextmanager
     def transaction(self) -> Iterator[sqlite3.Connection]:
