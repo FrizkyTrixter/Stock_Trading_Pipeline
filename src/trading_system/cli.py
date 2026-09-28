@@ -41,6 +41,11 @@ def build_parser() -> argparse.ArgumentParser:
     eod.add_argument("--model", type=Path, default=Path("data/processed/xgboost_model.joblib"))
     status = commands.add_parser("run-status")
     status.add_argument("run_id")
+    api = commands.add_parser(
+        "api", help="Serve the read-only FastAPI trading API (never writes or trades)"
+    )
+    api.add_argument("--host", default="127.0.0.1")
+    api.add_argument("--port", type=int, default=8000)
     return parser
 
 
@@ -54,6 +59,16 @@ def _market(settings: Any) -> YahooFinanceMarketDataService:
     )
 
 
+def _run_api(args: argparse.Namespace) -> int:
+    """Launch the read-only API server without constructing writable storage."""
+    import uvicorn
+
+    from .api_server import app
+
+    uvicorn.run(app, host=args.host, port=args.port)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     settings = load_settings(args.config)
@@ -61,6 +76,9 @@ def main(argv: list[str] | None = None) -> int:
         safe = settings.model_dump(mode="json", exclude={"erp_hmac_secret"})
         _json({"valid": True, "execution_mode": "simulation-only", "settings": safe})
         return 0
+    if args.command == "api":
+        # Read-only command: serve the API without creating or locking the DB.
+        return _run_api(args)
     storage = Storage(settings.database_path)
     try:
         if args.command == "research-universe":
