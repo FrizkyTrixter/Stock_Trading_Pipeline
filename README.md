@@ -90,3 +90,28 @@ fees, and realized P&L. One authoritative snapshot is allowed per market session
 
 See `docs/architecture_inventory.md` for the pre-change inventory and `docs/operations_runbook.md`
 for operating details.
+
+## Agentic Trading API
+
+A read-only FastAPI service exposes the simulated-trading ledger to agents and dashboards
+(for example the Bank ERP "Agentic Trading" page):
+
+```bash
+trading-system api --host 127.0.0.1 --port 8000
+```
+
+All endpoints are `GET` and return JSON:
+
+| Endpoint | Returns |
+|---|---|
+| `/health` | `{"status": "ok", "version": ...}` liveness probe |
+| `/api/portfolio` | cash, starting capital, realized P&L, portfolio peak, position count |
+| `/api/positions` | open positions: ticker, quantity, average cost |
+| `/api/trades?limit=50` | simulated trades with the linked AI decision's confidence, rationale, and metadata |
+| `/api/decisions?limit=50` | trade decisions: side, reason, confidence, rationale, metadata |
+| `/api/universe?limit=100` | latest research universe: thesis, catalysts, risks, confidence |
+
+Safety: the server opens the SQLite database with `mode=ro`, so it can never write to the
+ledger; the `api` command is wired before any writable `Storage` construction. There are no
+trading, order, or mutation endpoints. The database path comes from `TRADING_DATABASE_PATH`
+(default `data/trading_system.db`). Money fields serialize as strings and timestamps as ISO-8601.
