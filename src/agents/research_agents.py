@@ -1,158 +1,188 @@
+"""Conservative, diversified ticker-universe research agent.
+
+Requires: pip install openai
+Environment: OPENAI_API_KEY; optional OPENAI_MODEL (default gpt-5.5).
+Produces ticker_universe.json and ticker_universe_research.txt.
+
+Research assessments are LLM-derived, not independently audited financial data.
+"""
+
 import json
 import os
+import re
 import sys
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
 from openai import OpenAI
 
-MODEL = "gpt-5.5"
+MODEL = os.getenv("OPENAI_MODEL", "gpt-5.5")
 OUTPUT_FILE = Path("ticker_universe.json")
+RESEARCH_FILE = Path("ticker_universe_research.txt")
 EXPECTED_UNIVERSE_SIZE = 100
 MAX_FORMAT_ATTEMPTS = 3
+# Preserve the original strategy string for existing downstream consumers.
+LEGACY_STRATEGY = "AI picks and shovels"
+MAX_SECTOR_COUNT = 25
+
+RESEARCH_PROMPT = """
+# Institutional-Quality Equity Universe Research Agent
+
+You are a conservative, evidence-driven equity research analyst responsible for
+constructing a diversified universe of 100 publicly traded companies for a
+systematic XGBoost trading platform.
+
+Your responsibility is NOT to predict which stocks will rise the fastest.
+Identify financially credible, liquid, established businesses with acceptable
+financial risk and sufficient historical data for quantitative modeling.
+The XGBoost model independently evaluates short-term trading opportunities.
+
+## 1. Research requirements
+Use current public financial information and extensive web research. Do not
+select companies from memory alone. Begin with established equity benchmarks:
+S&P 500, S&P MidCap 400, Nasdaq-100, and selectively S&P SmallCap 600.
+Verify membership from official index-provider or exchange information when
+available. Index membership is NOT proof of financial safety.
+Do not restrict the universe to AI, technology, or any investment narrative.
+
+## 2. Fundamental quality
+Prioritize positive recent operating cash flow; positive free cash flow in at
+least two of the past three fiscal years; positive operating income; manageable
+debt relative to cash generation; adequate liquidity for near-term obligations;
+sustainable operating history; reliable financial disclosures; sufficient
+market capitalization and trading volume; and limited dependence on repeated
+external financing. Use the latest available filings and report their dates.
+
+## 3. Financial risk exclusions
+Exclude companies with documented material going-concern concerns, severe
+liquidity or solvency distress, persistent negative operating cash flow combined
+with external financing dependence, unsustainable interest expense, material
+unfunded near-term refinancing obligations, serious unresolved accounting
+concerns, or speculative business models without established operations.
+Review customer/counterparty concentration, off-balance-sheet obligations,
+capital expenditure commitments, and deteriorating financial performance.
+Apply exclusions using documented evidence, not narrative or guesswork.
+Use sector-appropriate analysis for banks, insurers, utilities, and REITs;
+industrial leverage ratios are not universal.
+
+## 4. Market quality
+Prefer market capitalization >= USD 5 billion; median daily dollar volume
+>= USD 20 million over 60 sessions; >= 3 years of usable daily price history;
+reliable adjusted prices; active listing; and no trading suspension.
+These are initial policy thresholds, not guarantees. Do not include ETFs,
+cryptocurrencies, private companies, delisted stocks, or duplicate share classes.
+
+## 5. Diversification
+Diversify across information technology, healthcare, financials, industrials,
+consumer staples, consumer discretionary, utilities, energy, materials,
+communication services, and real estate. Aim for no more than 25 companies
+in one sector. Consider shared sensitivity to rates, credit conditions,
+commodities, and the economic cycle.
+
+## 6. AI exposure
+AI-related companies may qualify only under the SAME financial standards.
+Do not favor GPU, cloud, data-center, nuclear, quantum, robotics, or other
+emerging-technology companies simply because of enthusiasm, revenue growth,
+large customers, ambitious capex plans, or narrative momentum.
+
+## 7. Evidence and integrity
+For EACH selected company, document its exact uppercase ticker, company name,
+primary sector, listing verification, index membership if verified, market cap,
+liquidity, operating cash flow, free cash flow, debt and liquidity condition,
+material risks, and at least one specific source URL with its reporting date.
+Distinguish observed facts from analysis. Never fabricate a metric or citation.
+If data is unavailable, say UNKNOWN and do not claim verification.
+Do not include a company unless its essential financial quality, current listing,
+and liquidity can be reasonably supported by retrieved evidence.
+
+## 8. Selection process
+Research a broad candidate pool from established indices, then assess
+financial strength, trading liquidity, data availability, and concentration.
+Exclude material financial distress and select the 100 strongest eligible
+candidates, without optimizing for expected 50-day gains.
+If you cannot verify 100 eligible companies, state the shortfall explicitly.
+NEVER invent companies, evidence, or weaken standards to hit a quota.
+
+## 9. Output format (research stage only)
+Produce a detailed report. Start with a section titled EXACTLY:
+SELECTED TICKERS
+Then provide exactly one ticker per line in this form:
+TICKER | Company Name | Primary GICS Sector
+Only include companies whose financial quality and eligibility you researched.
+After that section, start a section titled EXACTLY:
+END SELECTED TICKERS
+Then provide a separate numbered evidence section for EACH selected company,
+including financial strength, risk factors, listing verification, sources,
+and reporting dates. End with a sector count summary and verification gaps.
+Do not write JSON in this research stage.
+""".strip()
 
 
 def build_research_prompt() -> str:
-    """
-    Prompt for stage one.
-
-    This stage may use web search, but it does not request JSON mode.
-    Its output becomes source material for the formatting stage.
-    """
-    return """
-You are an elite AI infrastructure investment research agent.
-
-Research and construct a candidate universe of exactly 100 publicly traded
-companies for an AI-driven adaptive trading system.
-
-You MUST use web search extensively. Do not construct the universe from memory
-alone.
-
-For every company, verify from current internet sources that:
-
-1. The company is currently publicly traded.
-2. Its ticker symbol is current.
-3. The ticker corresponds to the named company.
-4. The company is not an ETF, cryptocurrency, or private company.
-5. The company has a meaningful connection to at least one target category.
-
-Investment theme:
-Use an "AI picks and shovels" philosophy inspired by AI infrastructure growth.
-
-Target categories:
-
-1. Semiconductors
-2. AI accelerators
-3. GPU supply chain
-4. Semiconductor equipment
-5. Advanced packaging
-6. Foundries
-7. Data centers
-8. Cloud computing
-9. Optical interconnects
-10. Networking
-11. Power generation
-12. Nuclear energy
-13. Grid infrastructure
-14. Electrical equipment
-15. Cooling systems
-16. Robotics
-17. Space infrastructure
-18. Cybersecurity
-19. Quantum computing
-20. AI software infrastructure
-21. Industrial automation
-22. Memory and storage
-23. Energy storage
-24. Rare earths and critical minerals
-
-Selection rules:
-
-- Select exactly 100 unique publicly traded stock tickers.
-- Prefer companies with substantial growth potential.
-- Prefer companies benefiting directly or indirectly from AI infrastructure demand.
-- Include a mix of large-cap, mid-cap, and smaller speculative companies.
-- Avoid random or extremely illiquid penny stocks.
-- Avoid ETFs.
-- Avoid cryptocurrencies.
-- Avoid private companies.
-- Avoid companies whose primary business is widely considered unethical.
-- Prefer liquid stocks suitable for a momentum strategy.
-- Favor companies with catalysts, volatility, and narrative momentum.
-- Make the universe useful for an XGBoost model attempting to identify stocks
-  likely to appreciate by at least 10% within 50 trading days.
-- Do not give personal financial advice.
-
-For each selected company, provide:
-
-- Current ticker
-- Company name
-- Primary category
-- Concise reason for inclusion
-- Brief verification note explaining how the ticker and public listing were checked
-- Source names or URLs used for verification
-
-Before finishing, audit the proposed universe for:
-
-- Duplicate tickers
-- Duplicate companies with multiple share classes
-- Delisted companies
-- Acquired companies
-- Renamed tickers
-- ETFs
-- Private companies
-- Companies with only a weak relationship to the target investment theme
-
-Return a detailed research report. The report may use headings, prose, or tables.
-Do not attempt to return strict JSON in this stage because another model call
-will convert the research into structured JSON.
-""".strip()
+    return RESEARCH_PROMPT
 
 
-def build_formatting_prompt(research_report: str) -> str:
-    """
-    Prompt for stage two.
+def extract_researched_tickers(report: str) -> dict[str, dict[str, str]]:
+    """Extract only the explicitly selected companies, not incidental mentions."""
+    match = re.search(
+        r"(?im)^SELECTED TICKERS\s*$([\s\S]*?)^END SELECTED TICKERS\s*$",
+        report,
+    )
+    if not match:
+        raise ValueError("Research report lacks the required selected-tickers section.")
+    result: dict[str, dict[str, str]] = {}
+    companies: set[str] = set()
+    for line in match.group(1).splitlines():
+        if not line.strip():
+            continue
+        parts = [part.strip() for part in line.split("|")]
+        if len(parts) != 3:
+            raise ValueError(f"Invalid research ticker line: {line[:120]}")
+        ticker, company, sector = parts
+        ticker = ticker.upper()
+        if not re.fullmatch(r"[A-Z][A-Z0-9.\-]{0,11}", ticker):
+            raise ValueError(f"Invalid ticker format: {ticker}")
+        company_key = re.sub(r"[^a-z0-9]", "", company.casefold())
+        if not company_key or not sector:
+            raise ValueError(f"Missing company or sector for {ticker}")
+        if ticker in result or company_key in companies:
+            raise ValueError(f"Duplicate ticker/company in research: {ticker}")
+        companies.add(company_key)
+        result[ticker] = {"company": company, "category": sector}
+    if len(result) != EXPECTED_UNIVERSE_SIZE:
+        raise ValueError(
+            f"Research documented {len(result)} companies, not "
+            f"{EXPECTED_UNIVERSE_SIZE}; refusing to fill gaps with guesses."
+        )
+    counts = Counter(v["category"].casefold() for v in result.values())
+    if any(count > MAX_SECTOR_COUNT for count in counts.values()):
+        raise ValueError(f"Research exceeds sector limit: {dict(counts)}")
+    return result
 
-    This stage does not use web search. It converts the researched material
-    into the required JSON structure.
-    """
-    return f"""
-Convert the research report below into the required ticker-universe structure.
 
-Important requirements:
+def build_formatting_prompt(report: str, error: str = "") -> str:
+    return f"""Convert the research below into the specified JSON schema.
+Use ONLY the 100 companies between SELECTED TICKERS and END SELECTED TICKERS.
+Do not add, replace, or omit any ticker. Preserve each researched company name
+and sector exactly. Set category to that sector. Write a concise, specific
+reason focused on documented financial quality, not price speculation.
+Set strategy exactly to {LEGACY_STRATEGY!r} solely for backward compatibility;
+this label does NOT describe the new diversified investment philosophy.
+Set universe_size to {EXPECTED_UNIVERSE_SIZE}.
+Do not fabricate financial claims. Do not include sources in the legacy JSON.
+Previous validation error, if any: {error or 'None'}
 
-- Return exactly 100 ticker entries.
-- Every ticker must be unique, using a case-insensitive comparison.
-- Every company must be publicly traded.
-- Do not include ETFs, cryptocurrencies, private companies, or delisted stocks.
-- Do not invent companies or facts that are absent from the research.
-- Use uppercase ticker symbols.
-- Keep each reason concise and specific.
-- Assign one primary category to each company.
-- Set "strategy" exactly to "AI picks and shovels".
-- Set "universe_size" exactly to 100.
-- Do not include source URLs or verification notes in the final structure.
-- Do not give financial advice.
-
-RESEARCH REPORT
-================
-{research_report}
-================
-END RESEARCH REPORT
-""".strip()
+RESEARCH REPORT:
+{report}
+"""
 
 
 TICKER_UNIVERSE_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
-        "strategy": {
-            "type": "string",
-            "enum": ["AI picks and shovels"],
-        },
-        "universe_size": {
-            "type": "integer",
-            "enum": [EXPECTED_UNIVERSE_SIZE],
-        },
+        "strategy": {"type": "string", "enum": [LEGACY_STRATEGY]},
+        "universe_size": {"type": "integer", "enum": [EXPECTED_UNIVERSE_SIZE]},
         "tickers": {
             "type": "array",
             "minItems": EXPECTED_UNIVERSE_SIZE,
@@ -160,242 +190,129 @@ TICKER_UNIVERSE_SCHEMA: dict[str, Any] = {
             "items": {
                 "type": "object",
                 "properties": {
-                    "ticker": {
-                        "type": "string",
-                        "minLength": 1,
-                    },
-                    "company": {
-                        "type": "string",
-                        "minLength": 1,
-                    },
-                    "category": {
-                        "type": "string",
-                        "minLength": 1,
-                    },
-                    "reason": {
-                        "type": "string",
-                        "minLength": 1,
-                    },
+                    "ticker": {"type": "string"},
+                    "company": {"type": "string"},
+                    "category": {"type": "string"},
+                    "reason": {"type": "string"},
                 },
-                "required": [
-                    "ticker",
-                    "company",
-                    "category",
-                    "reason",
-                ],
+                "required": ["ticker", "company", "category", "reason"],
                 "additionalProperties": False,
             },
         },
     },
-    "required": [
-        "strategy",
-        "universe_size",
-        "tickers",
-    ],
+    "required": ["strategy", "universe_size", "tickers"],
     "additionalProperties": False,
 }
 
 
 def get_client() -> OpenAI:
-    api_key = os.getenv("OPENAI_API_KEY")
-
-    if not api_key:
-        raise RuntimeError(
-            'OPENAI_API_KEY is not set.\nIn WSL, set it with:\nexport OPENAI_API_KEY="your-api-key"'
-        )
-
-    return OpenAI(api_key=api_key)
+    if not os.getenv("OPENAI_API_KEY"):
+        raise RuntimeError("OPENAI_API_KEY environment variable is not set.")
+    return OpenAI()
 
 
 def perform_web_research(client: OpenAI) -> str:
-    """
-    Stage one: conduct current web research without JSON mode.
-    """
-    print("Stage 1/2: Researching and validating companies with web search...")
-
+    print("Stage 1/2: Researching diversified, financially established companies...")
     response = client.responses.create(
         model=MODEL,
         input=build_research_prompt(),
-        tools=[
-            {
-                "type": "web_search",
-            }
-        ],
+        tools=[{"type": "web_search"}],
         tool_choice="required",
     )
-
-    research_report = response.output_text.strip()
-
-    if not research_report:
-        raise RuntimeError("The web-research stage returned no text.")
-
-    print(f"Research stage completed ({len(research_report):,} characters received).")
-
-    return research_report
+    report = response.output_text.strip()
+    if not report:
+        raise RuntimeError("Web research returned no report.")
+    return report
 
 
-def format_research_as_json(
-    client: OpenAI,
-    research_report: str,
-) -> dict[str, Any]:
-    """
-    Stage two: convert the research report into strict structured JSON.
-
-    No web-search tool is attached to this request, so structured output can
-    be used here.
-    """
-    print("Stage 2/2: Converting the research into validated JSON...")
-
+def format_research_as_json(client: OpenAI, report: str, error: str = "") -> dict[str, Any]:
     response = client.responses.create(
         model=MODEL,
-        input=build_formatting_prompt(research_report),
-        text={
-            "format": {
-                "type": "json_schema",
-                "name": "ticker_universe",
-                "strict": True,
-                "schema": TICKER_UNIVERSE_SCHEMA,
-            }
-        },
+        input=build_formatting_prompt(report, error),
+        text={"format": {
+            "type": "json_schema",
+            "name": "ticker_universe",
+            "strict": True,
+            "schema": TICKER_UNIVERSE_SCHEMA,
+        }},
     )
-
-    output_text = response.output_text.strip()
-
-    if not output_text:
-        raise RuntimeError("The JSON-formatting stage returned no text.")
-
-    try:
-        return json.loads(output_text)
-    except json.JSONDecodeError as exc:
-        raise RuntimeError("The formatting stage did not return valid JSON.") from exc
+    if not response.output_text.strip():
+        raise RuntimeError("Formatting response was empty.")
+    return json.loads(response.output_text)
 
 
-def validate_universe(universe: dict[str, Any]) -> None:
-    """
-    Perform application-level validation not fully enforced by JSON Schema.
-
-    JSON Schema can enforce array length, but it cannot conveniently enforce
-    uniqueness based on a nested ticker field.
-    """
-    if universe.get("strategy") != "AI picks and shovels":
-        raise ValueError("Unexpected strategy value.")
-
-    tickers = universe.get("tickers")
-
-    if not isinstance(tickers, list):
-        raise ValueError("'tickers' must be a list.")
-
-    if len(tickers) != EXPECTED_UNIVERSE_SIZE:
-        raise ValueError(f"Expected {EXPECTED_UNIVERSE_SIZE} tickers, but received {len(tickers)}.")
-
-    declared_size = universe.get("universe_size")
-
-    if declared_size != len(tickers):
-        raise ValueError(
-            f"universe_size is {declared_size}, but the ticker list contains "
-            f"{len(tickers)} entries."
-        )
-
-    normalized_tickers: list[str] = []
-
-    for index, entry in enumerate(tickers, start=1):
+def validate_universe(universe: dict[str, Any], researched: dict[str, dict[str, str]]) -> None:
+    if universe.get("strategy") != LEGACY_STRATEGY:
+        raise ValueError("Unexpected strategy field.")
+    entries = universe.get("tickers")
+    if not isinstance(entries, list) or len(entries) != EXPECTED_UNIVERSE_SIZE:
+        raise ValueError("Expected exactly 100 ticker entries.")
+    if universe.get("universe_size") != len(entries):
+        raise ValueError("Universe size mismatch.")
+    seen: set[str] = set()
+    for entry in entries:
         if not isinstance(entry, dict):
-            raise ValueError(f"Ticker entry {index} is not an object.")
+            raise ValueError("Ticker entry must be an object.")
+        for key in ("ticker", "company", "category", "reason"):
+            if not isinstance(entry.get(key), str) or not entry[key].strip():
+                raise ValueError(f"Invalid or missing field: {key}")
+            entry[key] = entry[key].strip()
+        ticker = entry["ticker"].upper()
+        entry["ticker"] = ticker
+        if ticker in seen:
+            raise ValueError(f"Duplicate ticker: {ticker}")
+        seen.add(ticker)
+        if ticker not in researched:
+            raise ValueError(f"Unresearched ticker introduced: {ticker}")
+        original = researched[ticker]
+        if entry["company"].casefold() != original["company"].casefold():
+            raise ValueError(f"Company mismatch for {ticker}")
+        if entry["category"].casefold() != original["category"].casefold():
+            raise ValueError(f"Sector mismatch for {ticker}")
+    if seen != set(researched):
+        raise ValueError(f"Missing researched tickers: {sorted(set(researched) - seen)}")
 
-        for field in ("ticker", "company", "category", "reason"):
-            value = entry.get(field)
 
-            if not isinstance(value, str) or not value.strip():
-                raise ValueError(f"Ticker entry {index} has an invalid '{field}' value.")
-
-            entry[field] = value.strip()
-
-        entry["ticker"] = entry["ticker"].upper()
-        normalized_tickers.append(entry["ticker"])
-
-    duplicate_tickers = sorted(
-        {ticker for ticker in normalized_tickers if normalized_tickers.count(ticker) > 1}
-    )
-
-    if duplicate_tickers:
-        raise ValueError("Duplicate ticker symbols found: " + ", ".join(duplicate_tickers))
-
-
-def get_ticker_universe() -> dict[str, Any]:
-    """
-    Run the complete two-stage pipeline.
-
-    Formatting is retried if the second response passes JSON Schema but fails
-    an application-level rule such as nested ticker uniqueness.
-    """
+def get_ticker_universe() -> tuple[dict[str, Any], str]:
     client = get_client()
-    research_report = perform_web_research(client)
-
-    last_error: Exception | None = None
-
+    report = perform_web_research(client)
+    # A failed research run is deliberately not repaired with invented names.
+    researched = extract_researched_tickers(report)
+    last_error = ""
     for attempt in range(1, MAX_FORMAT_ATTEMPTS + 1):
         try:
-            universe = format_research_as_json(
-                client=client,
-                research_report=research_report,
-            )
-            validate_universe(universe)
-            return universe
-
-        except (RuntimeError, ValueError) as exc:
-            last_error = exc
-
-            if attempt == MAX_FORMAT_ATTEMPTS:
-                break
-
-            print(
-                f"Formatting attempt {attempt} failed: {exc}",
-                file=sys.stderr,
-            )
-            print("Retrying the formatting stage...", file=sys.stderr)
-
-    raise RuntimeError(
-        f"Could not produce a valid ticker universe after "
-        f"{MAX_FORMAT_ATTEMPTS} formatting attempts."
-    ) from last_error
+            print(f"Stage 2/2: Formatting attempt {attempt}...")
+            universe = format_research_as_json(client, report, last_error)
+            validate_universe(universe, researched)
+            return universe, report
+        except (ValueError, RuntimeError, json.JSONDecodeError) as exc:
+            last_error = str(exc)
+            print(f"Formatting attempt {attempt} failed: {exc}", file=sys.stderr)
+    raise RuntimeError(f"Formatting failed after {MAX_FORMAT_ATTEMPTS} attempts: {last_error}")
 
 
-def save_universe(
-    universe: dict[str, Any],
-    filename: Path = OUTPUT_FILE,
-) -> None:
-    """
-    Save through a temporary file and then replace the destination.
+def atomic_write_text(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(content, encoding="utf-8")
+    temporary.replace(path)
 
-    This avoids leaving a partially written JSON file if writing fails.
-    """
-    filename.parent.mkdir(parents=True, exist_ok=True)
-    temporary_file = filename.with_suffix(filename.suffix + ".tmp")
 
-    with temporary_file.open("w", encoding="utf-8") as file:
-        json.dump(
-            universe,
-            file,
-            indent=2,
-            ensure_ascii=False,
-        )
-        file.write("\n")
-
-    temporary_file.replace(filename)
+def save_universe(universe: dict[str, Any], filename: Path = OUTPUT_FILE) -> None:
+    atomic_write_text(filename, json.dumps(universe, indent=2, ensure_ascii=False) + "\n")
 
 
 def main() -> None:
     try:
-        universe = get_ticker_universe()
+        universe, report = get_ticker_universe()
+        # Preserve the report for human review; it is not independent verification.
+        atomic_write_text(RESEARCH_FILE, report + "\n")
         save_universe(universe)
-
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr)
         raise SystemExit(1) from exc
-
-    print(f"Saved ticker universe to '{OUTPUT_FILE.resolve()}'")
-    print(f"Validated {len(universe['tickers'])} unique ticker entries.")
-    print(json.dumps(universe, indent=2, ensure_ascii=False))
+    print(f"Saved {len(universe['tickers'])} tickers to {OUTPUT_FILE.resolve()}")
+    print(f"Research report: {RESEARCH_FILE.resolve()}")
 
 
 if __name__ == "__main__":
